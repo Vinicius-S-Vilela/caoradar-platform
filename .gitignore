@@ -1,0 +1,58 @@
+===================================
+
+GERAL / OS
+
+===================================
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+===================================
+
+BACKEND (JAVA / SPRING BOOT)
+
+===================================
+
+backend/target/
+backend/**/.class
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+backend/.jar
+
+===================================
+
+FRONTEND (ANGULAR / NODE)
+
+===================================
+
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/package-lock.json # (Opcional: alguns times gostam de versioanr, outros não)
+frontend/yarn.lock
+
+===================================
+
+IA SERVICE (PYTHON / YOLO)
+
+===================================
+
+ia-service/pycache/
+ia-service/.py[cod]
+ia-service/venv/
+ia-service/.env
+ia-service/runs/       # Pasta onde o YOLO salva resultados de treino
+ia-service/.pt        # Pesos do modelo (se forem muito grandes, use Git LFS)
+
+===================================
+
+DOCKER & ENV
+
+===================================
+
+.env
+docker-compose.override.yml

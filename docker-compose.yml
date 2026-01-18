@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # ==============================
+  # BANCO DE DADOS (PostgreSQL)
+  # ==============================
+  db:
+    image: postgres:15-alpine
+    container_name: caoradar-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: caoradar_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ==============================
+  # BACKEND (Spring Boot)
+  # ==============================
+  # backend:
+  #   build: ./backend
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - db
+
+  # ==============================
+  # IA SERVICE (Python)
+  # ==============================
+  # ia-service:
+  #   build: ./ia-service
+  #   ports:
+  #     - "8000:8000"
+
+volumes:
+  postgres_data:
