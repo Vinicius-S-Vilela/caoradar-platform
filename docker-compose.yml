@@ -1,38 +1,36 @@
 version: '3.8'
 
 services:
-  # ==============================
+  # ==========================================
   # BANCO DE DADOS (PostgreSQL)
-  # ==============================
+  # ==========================================
   db:
     image: postgres:15-alpine
     container_name: caoradar-postgres
+    restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: caoradar_db
+      POSTGRES_DB: caoradar_db      # Nome do banco que o Java vai procurar
+      POSTGRES_USER: admin          # Usuário de conexão
+      POSTGRES_PASSWORD: admin      # Senha de conexão
     ports:
-      - "5432:5432"
+      - "5432:5432"                 # Mapeia a porta 5432 do Container para o Windows
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data # Garante que os dados não sumam ao reiniciar
 
-  # ==============================
-  # BACKEND (Spring Boot)
-  # ==============================
+  # ==========================================
+  # FUTURO: BACKEND & IA
+  # ==========================================
   # backend:
   #   build: ./backend
   #   ports:
   #     - "8080:8080"
   #   depends_on:
   #     - db
-
-  # ==============================
-  # IA SERVICE (Python)
-  # ==============================
+  
   # ia-service:
   #   build: ./ia-service
   #   ports:
   #     - "8000:8000"
 
 volumes:
-  postgres_data:
+  postgres_data: # Definição do volume persistente
