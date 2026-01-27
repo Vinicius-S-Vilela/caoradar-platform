@@ -13,6 +13,10 @@ public class MetadadosVisuais implements Serializable {
 	private Double confiancaDetecao;
 	private List<String> caracteristicasExtras;
 
+	// Construtor vazio obrigatório para o Jackson/Hibernate
+	public MetadadosVisuais() {
+	}
+
 	public String getRacaEstimada() {
 		return racaEstimada;
 	}
