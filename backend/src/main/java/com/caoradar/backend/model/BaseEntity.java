@@ -1,25 +1,47 @@
 package com.caoradar.backend.model;
 
 import jakarta.persistence.*;
-import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Data // Lombok
 @MappedSuperclass
 public abstract class BaseEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID) // Gera UUIDs automáticos
-    private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID) // Gera UUIDs automáticos
+	private UUID id;
 
-    @CreationTimestamp
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
+	@CreationTimestamp
+	@Column(updatable = false)
+	private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
+	@UpdateTimestamp
+	private LocalDateTime updatedAt;
+
+	public UUID getId() {
+		return id;
+	}
+
+	public void setId(UUID id) {
+		this.id = id;
+	}
+
+	public LocalDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(LocalDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public LocalDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(LocalDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
 }
