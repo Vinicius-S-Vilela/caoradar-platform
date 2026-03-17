@@ -1,6 +1,7 @@
 package com.caoradar.backend.controller;
 
 import com.caoradar.backend.model.RelatoPerda;
+import com.caoradar.backend.model.StatusRelato;
 import com.caoradar.backend.model.User;
 import com.caoradar.backend.service.RelatoService;
 import com.caoradar.backend.service.UserService;
@@ -44,5 +45,17 @@ public class RelatoController {
         User tutor = new User();
         tutor.setId(tutorId);
         return ResponseEntity.ok(relatoService.listarPorTutor(tutor));
+    }
+    
+ // GET /relatos?status=EM_BUSCA&cor=PRETO&raca=Poodle
+    @GetMapping
+    public ResponseEntity<List<RelatoPerda>> listarComFiltros(
+            @RequestParam(required = false) StatusRelato status,
+            @RequestParam(required = false) String cor,
+            @RequestParam(required = false) String porte,
+            @RequestParam(required = false) String raca) {
+        
+        List<RelatoPerda> resultados = relatoService.buscarComFiltros(status, cor, porte, raca);
+        return ResponseEntity.ok(resultados);
     }
 }
