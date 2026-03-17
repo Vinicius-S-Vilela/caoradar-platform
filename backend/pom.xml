@@ -9,9 +9,9 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.caoradar</groupId>
-	<artifactId>backend</artifactId>
+	<artifactId>cao-radar</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>backend</name>
+	<name>Cão Radar API</name>
 	<description>API REST do SaaS CAORADAR (TCC)</description>
 	<url/>
 	<licenses>

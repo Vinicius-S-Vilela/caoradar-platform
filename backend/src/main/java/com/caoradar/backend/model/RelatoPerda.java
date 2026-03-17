@@ -39,6 +39,7 @@ public class RelatoPerda extends BaseEntity {
 	// METADADOS PARA FILTRO RÁPIDO
 	private String porteInformado;
 	private String corPredominante;
+	private String raca;
 
 	public User getTutor() {
 		return tutor;
@@ -118,5 +119,13 @@ public class RelatoPerda extends BaseEntity {
 
 	public void setCorPredominante(String corPredominante) {
 		this.corPredominante = corPredominante;
+	}
+
+	public String getRaca() {
+		return raca;
+	}
+
+	public void setRaca(String raca) {
+		this.raca = raca;
 	}
 }

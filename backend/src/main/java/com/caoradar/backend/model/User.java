@@ -10,8 +10,11 @@ public class User extends BaseEntity {
 
 	@Column(nullable = false)
 	private String nome;
+	
+	@Column(unique = true, nullable = false)
+    private String cpf;
 
-	@Column(nullable = false, unique = true)
+	@Column(unique = true, nullable = false)
 	private String email;
 
 	@Column(nullable = false)
@@ -61,4 +64,13 @@ public class User extends BaseEntity {
 	public void setRole(Role role) {
 		this.role = role;
 	}
+
+	public String getCpf() {
+		return cpf;
+	}
+
+	public void setCpf(String cpf) {
+		this.cpf = cpf;
+	}
+	
 }
