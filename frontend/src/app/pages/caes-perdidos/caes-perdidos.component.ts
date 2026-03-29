@@ -52,8 +52,13 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
           </div>
         </div>
 
-        <div class="empty-state" *ngIf="!loading && caesFiltrados.length === 0">
-          <p>Nenhum cão perdido encontrado</p>
+        <div class="error-state" *ngIf="!loading && errorMessage">
+          <p>{{errorMessage}}</p>
+          <button class="btn btn-outline" (click)="retry()">Tentar novamente</button>
+        </div>
+
+        <div class="empty-state" *ngIf="!loading && !errorMessage && caesFiltrados.length === 0">
+          <p>Nenhum cão perdido registrado no momento</p>
         </div>
       </div>
     </div>
@@ -75,6 +80,10 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
     .info { margin: 0.5rem 0; font-size: 0.9rem; color: var(--gray-text); }
     .contact { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-light); }
     .contact p { margin: 0.25rem 0; font-size: 0.9rem; }
+    .error-state { text-align: center; padding: 4rem 2rem; }
+    .error-state p { color: var(--error-red); margin-bottom: 1rem; font-size: 1.1rem; }
+    .loading-state { text-align: center; padding: 4rem 2rem; }
+    .empty-state { text-align: center; padding: 4rem 2rem; color: var(--gray-text); font-size: 1.1rem; }
   `]
 })
 export class CaesPerdidosComponent implements OnInit {
@@ -83,18 +92,32 @@ export class CaesPerdidosComponent implements OnInit {
   racas = RACAS_DISPONIVEIS;
   filtroRaca = '';
   loading = true;
+  errorMessage = '';
 
   constructor(private caoService: CaoService) {}
 
   ngOnInit(): void {
+    this.loadData();
+  }
+
+  loadData(): void {
+    this.loading = true;
+    this.errorMessage = '';
     this.caoService.getCaesPerdidos().subscribe({
       next: (caes) => {
         this.caesPerdidos = caes;
         this.caesFiltrados = caes;
         this.loading = false;
       },
-      error: () => { this.loading = false; }
+      error: (err) => {
+        this.errorMessage = err.message || 'Erro ao carregar dados';
+        this.loading = false;
+      }
     });
+  }
+
+  retry(): void {
+    this.loadData();
   }
 
   aplicarFiltro(): void {

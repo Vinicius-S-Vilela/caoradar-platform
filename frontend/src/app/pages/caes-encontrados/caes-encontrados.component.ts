@@ -49,7 +49,12 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
           </div>
         </div>
 
-        <div class="empty-state" *ngIf="!loading && caesFiltrados.length === 0">
+        <div class="error-state" *ngIf="!loading && errorMessage">
+          <p>{{errorMessage}}</p>
+          <button class="btn btn-outline" (click)="retry()">Tentar novamente</button>
+        </div>
+
+        <div class="empty-state" *ngIf="!loading && !errorMessage && caesFiltrados.length === 0">
           <p>Nenhum cão encontrado ainda</p>
         </div>
       </div>
@@ -72,6 +77,10 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
     .raca { color: var(--primary-blue); font-weight: 600; margin: 0.5rem 0; }
     .info { margin: 0.5rem 0; font-size: 0.9rem; color: var(--gray-text); }
     .success-text { color: var(--success-green); font-weight: 600; }
+    .error-state { text-align: center; padding: 4rem 2rem; }
+    .error-state p { color: var(--error-red); margin-bottom: 1rem; font-size: 1.1rem; }
+    .loading-state { text-align: center; padding: 4rem 2rem; }
+    .empty-state { text-align: center; padding: 4rem 2rem; color: var(--gray-text); font-size: 1.1rem; }
   `]
 })
 export class CaesEncontradosComponent implements OnInit {
@@ -80,18 +89,32 @@ export class CaesEncontradosComponent implements OnInit {
   racas = RACAS_DISPONIVEIS;
   filtroRaca = '';
   loading = true;
+  errorMessage = '';
 
   constructor(private caoService: CaoService) {}
 
   ngOnInit(): void {
+    this.loadData();
+  }
+
+  loadData(): void {
+    this.loading = true;
+    this.errorMessage = '';
     this.caoService.getCaesEncontrados().subscribe({
       next: (caes) => {
         this.caesEncontrados = caes;
         this.caesFiltrados = caes;
         this.loading = false;
       },
-      error: () => { this.loading = false; }
+      error: (err) => {
+        this.errorMessage = err.message || 'Erro ao carregar dados';
+        this.loading = false;
+      }
     });
+  }
+
+  retry(): void {
+    this.loadData();
   }
 
   aplicarFiltro(): void {
