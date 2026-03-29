@@ -68,6 +68,22 @@ import { AuthService } from '../../core/services/auth.service';
             </div>
 
             <div class="form-group">
+              <label for="cpf" class="form-label">CPF *</label>
+              <input
+                id="cpf"
+                type="text"
+                class="form-control"
+                [class.error]="registerForm.get('cpf')?.invalid && registerForm.get('cpf')?.touched"
+                formControlName="cpf"
+                placeholder="000.000.000-00"
+                maxlength="14"
+              >
+              <span class="form-error" *ngIf="registerForm.get('cpf')?.invalid && registerForm.get('cpf')?.touched">
+                CPF é obrigatório
+              </span>
+            </div>
+
+            <div class="form-group">
               <label for="telefone" class="form-label">Telefone (opcional)</label>
               <input
                 id="telefone"
@@ -276,6 +292,7 @@ export class RegisterComponent {
     this.registerForm = this.fb.group({
       nome: ['', [Validators.required]],
       email: ['', [Validators.required, Validators.email]],
+      cpf: ['', [Validators.required]],
       telefone: [''],
       senha: ['', [Validators.required, Validators.minLength(6)]],
       confirmarSenha: ['', [Validators.required]]
