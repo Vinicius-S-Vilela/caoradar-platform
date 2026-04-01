@@ -47,6 +47,16 @@ public class RelatoController {
         return ResponseEntity.ok(relatoService.listarPorTutor(tutor));
     }
     
+    // DELETE /relatos/{id}
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deletarRelato(@PathVariable UUID id) {
+        if (!relatoService.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        relatoService.deletarPorId(id);
+        return ResponseEntity.ok("Relato removido com sucesso");
+    }
+
  // GET /relatos?status=EM_BUSCA&cor=PRETO&raca=Poodle
     @GetMapping
     public ResponseEntity<List<RelatoPerda>> listarComFiltros(
