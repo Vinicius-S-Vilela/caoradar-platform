@@ -4,15 +4,13 @@ import os
 import json
 import shutil
 import uuid
-import pandas as pd
 import requests
 from datetime import datetime
 from ultralytics import YOLO
 import cloudinary.uploader
 from agno.media import Image as AgnoImage
 
-# Removemos FOLDER_SHORT e FOLDER_FULL da importação
-from config.settings import FOLDER_TEMP, CSV_AVISTAMENTOS_DETECTADOS, YOLO_POR_SEGUNDO, TEMPO_IA_SEGUNDOS, TEMPO_SUMICO_SEGUNDOS
+from config.settings import FOLDER_TEMP, BACKEND_API_URL, YOLO_POR_SEGUNDO, TEMPO_IA_SEGUNDOS, TEMPO_SUMICO_SEGUNDOS
 from core.utils import extrair_json_robusto
 from core.agents import agente_filtro, agente_comparador, agente_classificador
 
@@ -64,7 +62,12 @@ def finalizar_evento(amostra_referencia, registros, track_id, camera_origem_id, 
                 }
             }
             registros.append(registro)
-            print(f"   💾 DADOS SALVOS (Raça: {registro['features']['racaEstimada']} | Confiança: {registro['features']['confiancaDetecao']})")
+            feat = registro['features']
+            print(f"   ✅ CÃO CLASSIFICADO:")
+            print(f"      🏷️  Raça: {feat['racaEstimada']} | Cor: {feat['corPredominante']} | Porte: {feat['porte']}")
+            print(f"      📊 Confiança: {feat['confiancaDetecao']*100:.1f}%")
+            print(f"      📝 Detalhes: {feat['detalhesCao'][:80]}..." if len(feat.get('detalhesCao','')) > 80 else f"      📝 Detalhes: {feat.get('detalhesCao','N/A')}")
+            print(f"      🔗 Snapshot: {url_short}")
 
         if os.path.exists(path_temp_short): os.remove(path_temp_short)
         if os.path.exists(path_temp_full): os.remove(path_temp_full)
@@ -118,8 +121,15 @@ def processar_video_best_shot(video_path, camera_origem_id, data_hora):
     frames_para_ia = max(1, int(fps_video * TEMPO_IA_SEGUNDOS))
     frames_sumico = max(1, int(fps_video * TEMPO_SUMICO_SEGUNDOS))
 
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duracao_seg = total_frames / fps_video if fps_video > 0 else 0
+
     print("\n" + "#"*60)
-    print(f"🎬 [SISTEMA] INICIANDO RASTREAMENTO | Arquivo: {video_path}")
+    print(f"🎬 [SISTEMA] INICIANDO RASTREAMENTO")
+    print(f"   📁 Arquivo: {video_path}")
+    print(f"   📹 Câmera: {camera_origem_id}")
+    print(f"   🎞️  Frames: {total_frames} | FPS: {fps_video:.1f} | Duração: {duracao_seg:.1f}s")
+    print(f"   ⚙️  YOLO a cada {pular_frames_yolo} frames | IA a cada {frames_para_ia} frames")
     print("#"*60 + "\n")
 
     while cap.isOpened():
@@ -159,7 +169,9 @@ def processar_video_best_shot(video_path, camera_origem_id, data_hora):
                         cv2.rectangle(frame_marked, (x1, y1), (x2, y2), (255, 255, 255), 2)
 
                         if track_id not in caes_rastreados:
-                            print(f"🐕 [CÃO {track_id}] Entrou na câmera (Frame {frame_idx}).")
+                            tempo_atual = frame_idx / fps_video if fps_video > 0 else 0
+                            tamanho_box = f"{x2-x1}x{y2-y1}px"
+                            print(f"🐕 [CÃO {track_id}] Entrou na câmera | Frame {frame_idx} ({tempo_atual:.1f}s) | Box: {tamanho_box}")
                             caes_rastreados[track_id] = {'amostra_referencia': None, 'frames_sem_objeto': 0, 'timer_ia': 0}
 
                         cao = caes_rastreados[track_id]
@@ -213,14 +225,44 @@ def processar_video_best_shot(video_path, camera_origem_id, data_hora):
             finalizar_evento(dados_cao['amostra_referencia'], registros, track_id, camera_origem_id, data_hora)
     
     # ==========================================
-    # 🚧 INTEGRAÇÃO COM BANCO DE DADOS 🚧
+    # PERSISTÊNCIA NO POSTGRESQL (VIA BACKEND API)
     # ==========================================
     if registros:
-        registros_csv = [{**r, 'features': json.dumps(r['features'], ensure_ascii=False)} for r in registros]
-        df = pd.DataFrame(registros_csv)
-        header = not os.path.exists(CSV_AVISTAMENTOS_DETECTADOS)
-        df.to_csv(CSV_AVISTAMENTOS_DETECTADOS, mode='a', header=header, index=False)
-        print(f"\n📊 Avistamentos detectados salvos: {len(registros)} registros salvos em {CSV_AVISTAMENTOS_DETECTADOS}.")
+        salvos = 0
+        for registro in registros:
+            try:
+                payload = {
+                    "codigoCamera": camera_origem_id,
+                    "snapshotUrl": registro["snapshot_url"],
+                    "features": {
+                        "racaEstimada": registro["features"].get("racaEstimada", "SDR"),
+                        "corPredominante": registro["features"].get("corPredominante", ""),
+                        "porteEstimado": registro["features"].get("porte", ""),
+                        "confiancaDetecao": registro["features"].get("confiancaDetecao", 0.0),
+                        "caracteristicasExtras": [registro["features"].get("detalhesCao", "")]
+                    }
+                }
+                resp = requests.post(
+                    f"{BACKEND_API_URL}/api/integracao/avistamentos",
+                    json=payload,
+                    timeout=60
+                )
+                resp.raise_for_status()
+                salvos += 1
+            except Exception as e:
+                print(f"⚠️ Erro ao enviar avistamento ao backend: {e}")
+
+        print(f"\n📊 Avistamentos salvos no PostgreSQL: {salvos}/{len(registros)} via API do backend.")
+
+    print("\n" + "="*60)
+    print(f"📋 RESUMO DO PROCESSAMENTO")
+    print(f"   📹 Câmera: {camera_origem_id}")
+    print(f"   🐕 Cães detectados: {len(registros)}")
+    if registros:
+        for i, r in enumerate(registros):
+            f = r['features']
+            print(f"   [{i+1}] {f['racaEstimada']} | {f['corPredominante']} | {f['porte']} | Conf: {f['confiancaDetecao']*100:.0f}%")
+    print("="*60)
 
     print("\n🧹 Destruindo pasta temporária de serviços...")
     try:

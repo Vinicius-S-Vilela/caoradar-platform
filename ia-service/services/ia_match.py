@@ -1,13 +1,10 @@
 import json
-import os
 import requests
-import pandas as pd
-from datetime import datetime
 from agno.media import Image as AgnoImage
 
 from core.agents import agente_match
 from core.utils import extrair_json_robusto
-from config.settings import CSV_AVISTAMENTOS_DETECTADOS, CSV_RELATOS_PERDIDOS
+from config.settings import BACKEND_API_URL
 
 
 # ==========================================
@@ -27,71 +24,79 @@ def verificar_url(url):
 
 
 # ==========================================
-# CONSULTA DE DADOS (CSV)
+# CONSULTA DE DADOS (BACKEND API → PostgreSQL)
 # ==========================================
 
 def buscar_caes_detectados_por_raca(raca_alvo: str):
-    """Retorna avistamentos detectados com a mesma raça."""
-    if not os.path.exists(CSV_AVISTAMENTOS_DETECTADOS):
-        print(f"⚠️ CSV de avistamentos não encontrado: {CSV_AVISTAMENTOS_DETECTADOS}")
-        return []
+    """Busca avistamentos detectados no banco via API do backend."""
     try:
-        df = pd.read_csv(CSV_AVISTAMENTOS_DETECTADOS)
-        df['features'] = df['features'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-        candidatos = df[df['features'].apply(lambda f: f.get('racaEstimada', '').lower() == raca_alvo.lower())].to_dict('records')
-        print(f"🔍 {len(candidatos)} cão(ões) '{raca_alvo}' detectado(s) encontrado(s)")
+        url = f"{BACKEND_API_URL}/avistamentos"
+        params = {"raca": raca_alvo}
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+
+        avistamentos = resp.json()
+        # Adapta formato do backend para o formato esperado pelo matching
+        candidatos = []
+        for av in avistamentos:
+            features = av.get("features", {})
+            candidatos.append({
+                "id": av.get("id"),
+                "snapshot_url": av.get("snapshotUrl"),
+                "features": features,
+                "raca_provavel": features.get("racaEstimada", ""),
+                "cor_predominante": features.get("corPredominante", ""),
+                "porte": features.get("porteEstimado", ""),
+                "confianca_detecao": features.get("confiancaDetecao", 0),
+                "detalhes_observados": features.get("detalhesCao", ""),
+            })
+
+        print(f"🔍 [DB] {len(candidatos)} avistamento(s) de '{raca_alvo}' encontrado(s) no banco")
         return candidatos
+
+    except requests.exceptions.ConnectionError:
+        print(f"❌ Backend indisponível em {BACKEND_API_URL}")
+        return []
     except Exception as e:
-        print(f"❌ Erro ao ler CSV de avistamentos: {e}")
+        print(f"❌ Erro ao buscar avistamentos no backend: {e}")
         return []
 
 
 def buscar_relatos_perdidos_por_raca(raca_alvo: str):
-    """Retorna relatos de cães perdidos com a mesma raça."""
-    if not os.path.exists(CSV_RELATOS_PERDIDOS):
-        print(f"⚠️ CSV de relatos não encontrado: {CSV_RELATOS_PERDIDOS}")
-        return []
+    """Busca relatos de cães perdidos no banco via API do backend."""
     try:
-        df = pd.read_csv(CSV_RELATOS_PERDIDOS)
-        candidatos = df[df['raca_provavel'].str.lower() == raca_alvo.lower()].to_dict('records')
-        print(f"🔍 {len(candidatos)} relato(s) de '{raca_alvo}' perdido(s) encontrado(s)")
+        url = f"{BACKEND_API_URL}/relatos"
+        params = {"status": "EM_BUSCA", "raca": raca_alvo}
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+
+        relatos = resp.json()
+        # Adapta formato do backend para o formato esperado pelo matching
+        candidatos = []
+        for rel in relatos:
+            fotos = rel.get("fotosUrl", [])
+            candidatos.append({
+                "id": rel.get("id"),
+                "relato_id": rel.get("id"),
+                "nome_cao": rel.get("nomeCao", ""),
+                "descricao": rel.get("descricao", ""),
+                "foto_url": fotos[0] if fotos else "",
+                "raca_provavel": rel.get("raca", ""),
+                "cor_predominante": rel.get("corPredominante", ""),
+                "porte": rel.get("porteInformado", ""),
+                "latitude": rel.get("latitude"),
+                "longitude": rel.get("longitude"),
+            })
+
+        print(f"🔍 [DB] {len(candidatos)} relato(s) de '{raca_alvo}' perdido(s) encontrado(s) no banco")
         return candidatos
-    except Exception as e:
-        print(f"❌ Erro ao ler CSV de relatos: {e}")
+
+    except requests.exceptions.ConnectionError:
+        print(f"❌ Backend indisponível em {BACKEND_API_URL}")
         return []
-
-
-def salvar_relato_perdido(relato_data: dict):
-    """Persiste um novo relato de cão perdido no CSV."""
-    try:
-        nova_linha = {
-            'relato_id': relato_data.get('relato_id'),
-            'tutor_id': relato_data.get('tutor_id', 'ANONIMO'),
-            'nome_cao': relato_data.get('nome_cao'),
-            'descricao': relato_data.get('descricao', ''),
-            'foto_url': relato_data.get('foto_url'),
-            'latitude': relato_data.get('latitude'),
-            'longitude': relato_data.get('longitude'),
-            'data_desaparecimento': relato_data.get('data_desaparecimento'),
-            'raca_provavel': relato_data.get('raca_provavel_estimada', 'Desconhecida'),
-            'porte': relato_data.get('porte', 'Desconhecido'),
-            'cor': relato_data.get('cor', 'Desconhecida'),
-            'timestamp_criacao': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'status': 'ATIVO'
-        }
-
-        if os.path.exists(CSV_RELATOS_PERDIDOS):
-            df_final = pd.concat([pd.read_csv(CSV_RELATOS_PERDIDOS), pd.DataFrame([nova_linha])], ignore_index=True)
-        else:
-            df_final = pd.DataFrame([nova_linha])
-
-        df_final.to_csv(CSV_RELATOS_PERDIDOS, index=False)
-        print(f"✅ Relato '{relato_data.get('nome_cao')}' salvo.")
-        return relato_data.get('relato_id')
-
     except Exception as e:
-        print(f"❌ Erro ao salvar relato: {e}")
-        return None
+        print(f"❌ Erro ao buscar relatos no backend: {e}")
+        return []
 
 
 # ==========================================
@@ -120,7 +125,7 @@ def realizar_match_multimodal(cao_alvo: dict, lista_candidatos: list):
     for i, candidato in enumerate(lista_candidatos):
         cand_temp = {k: v for k, v in candidato.items() if k not in ('url_img_short', 'url_img_full', 'frame_origem', 'foto_url', 'snapshot_url')}
         url_cand = candidato.get('snapshot_url') or candidato.get('url_img_short') or candidato.get('foto_url')
-        texto_prompt += f"--- CANDIDATO {i+1} ---\nAtributos: {json.dumps(cand_temp, ensure_ascii=False)}\n\n"
+        texto_prompt += f"--- CANDIDATO {i+1} (ID: {candidato.get('id', 'N/A')}) ---\nAtributos: {json.dumps(cand_temp, ensure_ascii=False)}\n\n"
         if url_cand and verificar_url(url_cand):
             imagens_para_enviar.append(AgnoImage(url=url_cand))
 
@@ -128,7 +133,18 @@ def realizar_match_multimodal(cao_alvo: dict, lista_candidatos: list):
         resposta = agente_match.run(texto_prompt, images=imagens_para_enviar)
         resultado = extrair_json_robusto(resposta.content)
         if resultado:
-            print(f"✅ {len(resultado)} resultado(s) de match obtido(s)")
+            print(f"\n{'─'*50}")
+            print(f"✅ RESULTADOS DE MATCH: {len(resultado)} candidato(s)")
+            print(f"{'─'*50}")
+            for i, m in enumerate(resultado):
+                score = m.get('probabilidade_match', 0)
+                id_cand = m.get('id_candidato', 'N/A')
+                justificativa = m.get('justificativa_visual_e_texto', 'Sem justificativa')
+                nivel = "🟢 ALTO" if score >= 75 else "🟡 MÉDIO" if score >= 40 else "🔴 BAIXO"
+                print(f"  [{i+1}] Candidato: {id_cand}")
+                print(f"      Score: {score}% ({nivel})")
+                print(f"      Justificativa: {justificativa[:120]}{'...' if len(str(justificativa)) > 120 else ''}")
+            print(f"{'─'*50}\n")
         else:
             print("⚠️ Agente não retornou resultados parseáveis")
         return resultado
@@ -143,21 +159,30 @@ def realizar_match_multimodal(cao_alvo: dict, lista_candidatos: list):
 
 def fazer_match_relato_perdido(relato_data: dict):
     """
-    Relato de cão PERDIDO criado → busca avistamentos DETECTADOS de mesma raça
+    Relato de cão PERDIDO criado → busca avistamentos DETECTADOS de mesma raça no banco
     e retorna matches ordenados por probabilidade.
     """
-    print(f"\n🔍 [MATCHING] Cão perdido: {relato_data.get('nome_cao')}")
+    nome = relato_data.get('nome_cao', '?')
+    raca_alvo = relato_data.get('raca_provavel_estimada') or relato_data.get('raca') or 'Desconhecida'
+    cor = relato_data.get('cor') or relato_data.get('corPredominante') or '?'
+    porte = relato_data.get('porte') or relato_data.get('porteInformado') or '?'
 
-    raca_alvo = relato_data.get('raca_provavel_estimada') or 'Desconhecida'
+    print(f"\n{'='*50}")
+    print(f"🔍 [MATCHING] NOVO RELATO DE CÃO PERDIDO")
+    print(f"   🐕 Nome: {nome} | Raça: {raca_alvo} | Cor: {cor} | Porte: {porte}")
+    print(f"   📍 Lat: {relato_data.get('latitude')} | Lon: {relato_data.get('longitude')}")
+    print(f"{'='*50}")
+
     candidatos = buscar_caes_detectados_por_raca(raca_alvo)
     if not candidatos:
+        print(f"   ℹ️  Nenhum avistamento de '{raca_alvo}' no banco. Match encerrado.")
         return []
 
     cao_alvo = {
         'id_cao': relato_data.get('relato_id', 'REL_NOVO'),
         'raca_provavel': raca_alvo,
-        'cor_predominante': relato_data.get('cor'),
-        'porte': relato_data.get('porte', 'Desconhecido'),
+        'cor_predominante': relato_data.get('cor') or relato_data.get('corPredominante'),
+        'porte': relato_data.get('porte') or relato_data.get('porteInformado', 'Desconhecido'),
         'detalhes_observados': relato_data.get('descricao', ''),
         'url_img_short': relato_data.get('foto_url', ''),
         'visao_det_per': 'PERDIDO'
@@ -175,14 +200,22 @@ def fazer_match_relato_perdido(relato_data: dict):
 
 def fazer_match_avistamento_detectado(avistamento_data: dict):
     """
-    Avistamento DETECTADO registrado → busca relatos PERDIDOS de mesma raça
+    Avistamento DETECTADO registrado → busca relatos PERDIDOS de mesma raça no banco
     e retorna matches ordenados por probabilidade.
     """
-    print(f"\n🔍 [MATCHING] Avistamento câmera: {avistamento_data.get('camera_id')}")
-
     raca_alvo = avistamento_data.get('raca_provavel', 'Desconhecida')
+    cor = avistamento_data.get('cor_predominante', '?')
+    porte = avistamento_data.get('porte', '?')
+
+    print(f"\n{'='*50}")
+    print(f"🔍 [MATCHING] NOVO AVISTAMENTO DETECTADO")
+    print(f"   📹 Câmera: {avistamento_data.get('camera_id')} | Raça: {raca_alvo} | Cor: {cor} | Porte: {porte}")
+    print(f"   📍 Lat: {avistamento_data.get('latitude')} | Lon: {avistamento_data.get('longitude')}")
+    print(f"{'='*50}")
+
     candidatos = buscar_relatos_perdidos_por_raca(raca_alvo)
     if not candidatos:
+        print(f"   ℹ️  Nenhum relato de '{raca_alvo}' perdido no banco. Match encerrado.")
         return []
 
     cao_alvo = {

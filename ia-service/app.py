@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from config.settings import setup_apis
 from services.monitoramento import processar_video_best_shot
-from services.ia_match import salvar_relato_perdido, fazer_match_relato_perdido, fazer_match_avistamento_detectado
+from services.ia_match import fazer_match_relato_perdido, fazer_match_avistamento_detectado
 
 # ==========================================
 # INICIALIZAÇÃO DO FASTAPI
@@ -195,10 +195,7 @@ async def criar_relato_cao_perdido(request: CriarRelatoRequest):
             'cor': request.cor,
         }
         
-        # 💾 SALVAR RELATO NO CSV
-        salvar_relato_perdido(relato_data)
-        
-        # FAZER MATCHING
+        # FAZER MATCHING (dados vêm do PostgreSQL via API do backend)
         print(f"🔍 Iniciando busca de matches para {request.nome_cao}...")
         matches = fazer_match_relato_perdido(relato_data)
         

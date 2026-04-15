@@ -4,22 +4,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- CAMINHOS DE PASTAS E ARQUIVOS ---
+# --- URL DO BACKEND (Spring Boot) ---
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8080")
+
+# --- CAMINHOS DE PASTAS ---
 FOLDER_TEMP = "temp_crops"
 
-# CSV para cães DETECTADOS (por câmeras/vídeos)
-CSV_AVISTAMENTOS_DETECTADOS = "avistamentos_detectados.csv"
-
-# CSV para cães PERDIDOS (relatos de tutores)
-CSV_RELATOS_PERDIDOS = "relatos_perdidos.csv"
-
-# (Legado - descontinuado)
-CSV_PATH = CSV_AVISTAMENTOS_DETECTADOS
-        
 # --- CONFIGURAÇÕES DE VÍDEO (YOLO) ---
-YOLO_POR_SEGUNDO = 5      
-TEMPO_IA_SEGUNDOS = 0.5   
-TEMPO_SUMICO_SEGUNDOS = 2 
+YOLO_POR_SEGUNDO = 5
+TEMPO_IA_SEGUNDOS = 0.5
+TEMPO_SUMICO_SEGUNDOS = 2
 
 def setup_apis():
     cloudinary.config(
@@ -30,3 +24,4 @@ def setup_apis():
     )
     if os.getenv("GOOGLE_API_KEY"):
         print("✅ [CONFIG] APIs inicializadas com sucesso.")
+    print(f"✅ [CONFIG] Backend API: {BACKEND_API_URL}")
