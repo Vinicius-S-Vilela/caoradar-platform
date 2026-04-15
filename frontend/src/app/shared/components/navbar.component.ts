@@ -31,19 +31,28 @@ import { User } from '../../core/models/user.model';
             Cães Perdidos
           </a>
           
-          <a 
-            routerLink="/caes-encontrados" 
-            routerLinkActive="active"
-            class="navbar-link"
-            (click)="closeMenu()"
-          >
-            Cães Encontrados
-          </a>
-
           <!-- Links para usuário autenticado -->
           <ng-container *ngIf="currentUser">
-            <a 
-              routerLink="/dashboard" 
+            <a
+              routerLink="/menu"
+              routerLinkActive="active"
+              class="navbar-link"
+              (click)="closeMenu()"
+            >
+              Menu
+            </a>
+
+            <a
+              routerLink="/matches"
+              routerLinkActive="active"
+              class="navbar-link"
+              (click)="closeMenu()"
+            >
+              Matches
+            </a>
+
+            <a
+              routerLink="/dashboard"
               routerLinkActive="active"
               class="navbar-link"
               (click)="closeMenu()"

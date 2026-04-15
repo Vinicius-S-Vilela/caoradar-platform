@@ -40,7 +40,7 @@ import { Cao } from '../../core/models/cao.model';
         <div class="grid" *ngIf="!loading && meusCaes.length > 0">
           <div class="card" *ngFor="let cao of meusCaes">
             <div class="card-image">
-              <img [src]="cao.foto" [alt]="cao.nome" onError="this.src='assets/images/dog-placeholder.jpg'">
+              <img [src]="cao.foto" [alt]="cao.nome" onerror="this.onerror=null;this.src='assets/images/dog-placeholder.jpg'">
               <span class="badge" [class.badge-perdido]="cao.status === 'Perdido'" [class.badge-encontrado]="cao.status === 'Encontrado'">
                 {{cao.status}}
               </span>
@@ -49,7 +49,10 @@ import { Cao } from '../../core/models/cao.model';
               <h3>{{cao.nome}}</h3>
               <p class="raca">{{cao.raca}}</p>
               <p class="local">{{cao.localizacaoPerdido.cidade}}</p>
-              <button class="btn btn-sm btn-outline" (click)="deleteCao(cao.id)">Excluir</button>
+              <div class="card-actions">
+                <button *ngIf="cao.status === 'Perdido'" class="btn btn-sm btn-encontrado" (click)="marcarEncontrado(cao)">Encontrado</button>
+                <button class="btn btn-sm btn-outline" (click)="deleteCao(cao.id)">Excluir</button>
+              </div>
             </div>
           </div>
         </div>
@@ -70,6 +73,9 @@ import { Cao } from '../../core/models/cao.model';
     .card-body h3 { margin: 0 0 0.5rem; font-size: 1.25rem; }
     .raca { color: var(--primary-blue); font-weight: 600; margin: 0.5rem 0; }
     .local { color: var(--gray-text); font-size: 0.9rem; margin: 0.5rem 0 1rem; }
+    .card-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn-encontrado { background: #27ae60 !important; color: white !important; border-color: #27ae60 !important; }
+    .btn-encontrado:hover { background: #219a52 !important; }
     .loading-state, .empty-state, .error-state { text-align: center; padding: 4rem 2rem; }
     .error-text { color: var(--error-red); margin-bottom: 1rem; font-size: 1.1rem; }
     @media (max-width: 768px) { .page-header { flex-direction: column; gap: 1rem; } }
@@ -96,6 +102,17 @@ export class DashboardComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  marcarEncontrado(cao: Cao): void {
+    if (confirm(`Marcar ${cao.nome} como encontrado?`)) {
+      this.caoService.marcarComoEncontrado(cao.id).subscribe({
+        next: () => {
+          this.meusCaes = this.meusCaes.map(c => c.id === cao.id ? { ...c, status: 'Encontrado' as const } : c);
+        },
+        error: (err) => { alert(err.message || 'Erro ao atualizar status'); }
+      });
+    }
   }
 
   deleteCao(id: string): void {
