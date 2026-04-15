@@ -34,13 +34,13 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
         <div class="grid" *ngIf="!loading">
           <div class="card" *ngFor="let cao of caesFiltrados">
             <div class="card-image">
-              <img [src]="cao.foto" [alt]="cao.nome" onError="this.src='assets/images/dog-placeholder.jpg'">
+              <img [src]="cao.foto" [alt]="cao.nome" onerror="this.onerror=null;this.src='assets/images/dog-placeholder.jpg'">
               <span class="badge badge-perdido">Perdido</span>
             </div>
             <div class="card-body">
               <h3>{{cao.nome}}</h3>
               <p class="raca">{{cao.raca}}</p>
-              <p class="info"><strong>Local:</strong> {{cao.localizacaoPerdido.bairro}}, {{cao.localizacaoPerdido.cidade}}</p>
+              <p class="info"><strong>Local:</strong> {{ getLocationText(cao) }}</p>
               <p class="info"><strong>Data:</strong> {{cao.dataPerdido | date:'dd/MM/yyyy'}}</p>
               <p class="info" *ngIf="cao.recompensa"><strong>Recompensa:</strong> R$ {{cao.recompensa}}</p>
               <div class="contact">
@@ -118,6 +118,11 @@ export class CaesPerdidosComponent implements OnInit {
 
   retry(): void {
     this.loadData();
+  }
+
+  getLocationText(cao: Cao): string {
+    const parts = [cao.localizacaoPerdido.bairro, cao.localizacaoPerdido.cidade, cao.localizacaoPerdido.estado].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : cao.descricao || 'Nao informado';
   }
 
   aplicarFiltro(): void {

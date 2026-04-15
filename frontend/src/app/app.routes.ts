@@ -18,6 +18,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/register/register.component').then(m => m.RegisterComponent)
   },
   {
+    path: 'menu',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/menu/menu.component').then(m => m.MenuComponent)
+  },
+  {
     path: 'dashboard',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/dashboard/dashboard.component').then(m => m.DashboardComponent)
@@ -32,8 +37,14 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/caes-perdidos/caes-perdidos.component').then(m => m.CaesPerdidosComponent)
   },
   {
-    path: 'caes-encontrados',
+    path: 'matches',
+    canActivate: [authGuard],
     loadComponent: () => import('./pages/caes-encontrados/caes-encontrados.component').then(m => m.CaesEncontradosComponent)
+  },
+  {
+    path: 'caes-encontrados',
+    redirectTo: '/matches',
+    pathMatch: 'full'
   },
   {
     path: 'admin',

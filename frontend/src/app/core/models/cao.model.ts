@@ -79,6 +79,7 @@ export interface RelatoBackend {
   status: StatusRelato;
   porteInformado: string | null;
   corPredominante: string | null;
+  raca: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -126,12 +127,36 @@ export function mapRelatoToCao(relato: RelatoBackend): Cao {
     'ARQUIVADO': 'Encontrado'
   };
 
+  // Parsea localização do campo descricao (formato: "Bairro, Cidade, UF | descricao")
+  // Só parseia localização se houver o separador ' | ' — sem ele, é descrição pura
+  const descRaw = relato.descricao || '';
+  const hasLocationEncoding = descRaw.includes(' | ');
+  const descParts = descRaw.split(' | ');
+  const locationPart = hasLocationEncoding ? (descParts[0] || '') : '';
+  const descText = hasLocationEncoding ? descParts.slice(1).join(' | ') : descRaw;
+  const locPieces = locationPart.split(', ');
+
+  let bairro = '';
+  let cidade = '';
+  let estado = '';
+
+  if (locPieces.length >= 3) {
+    bairro = locPieces[0];
+    cidade = locPieces[1];
+    estado = locPieces[2];
+  } else if (locPieces.length === 2) {
+    cidade = locPieces[0];
+    estado = locPieces[1];
+  } else if (locationPart && !descText) {
+    cidade = locationPart;
+  }
+
   return {
     id: relato.id,
     nome: relato.nomeCao,
-    raca: relato.porteInformado || 'Não informado',
+    raca: relato.raca || relato.porteInformado || 'Nao informado',
     cor: relato.corPredominante || undefined,
-    descricao: relato.descricao || undefined,
+    descricao: descText || relato.descricao || undefined,
     foto: relato.fotosUrl?.[0] || 'assets/images/dog-placeholder.jpg',
     status: statusMap[relato.status] || 'Perdido',
     dataPerdido: new Date(relato.dataDesaparecimento),
@@ -139,14 +164,15 @@ export function mapRelatoToCao(relato: RelatoBackend): Cao {
       latitude: relato.latitude || undefined,
       longitude: relato.longitude || undefined,
       endereco: '',
-      cidade: '',
-      estado: '',
+      bairro,
+      cidade,
+      estado,
     },
     usuarioId: relato.tutor?.id || '',
     contatoResponsavel: {
-      nome: relato.tutor?.nome || 'Não informado',
-      telefone: relato.tutor?.telefone || 'Não informado',
-      email: relato.tutor?.email || 'Não informado'
+      nome: relato.tutor?.nome || 'Nao informado',
+      telefone: relato.tutor?.telefone || 'Nao informado',
+      email: relato.tutor?.email || 'Nao informado'
     }
   };
 }
@@ -160,6 +186,7 @@ export interface CaoCadastro {
   idade?: number;
   sexo?: 'Macho' | 'Fêmea';
   cor?: string;
+  porte?: string;
   descricao?: string;
   fotos: string[];
   dataPerdido: Date;
