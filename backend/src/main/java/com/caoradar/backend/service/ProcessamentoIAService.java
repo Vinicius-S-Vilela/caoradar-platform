@@ -7,11 +7,12 @@ import com.caoradar.backend.repository.MatchRepository;
 import com.caoradar.backend.repository.RelatoPerdaRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 public class ProcessamentoIAService {
@@ -24,6 +25,11 @@ public class ProcessamentoIAService {
     private MatchRepository matchRepo;
     @Autowired
     private CameraRepository cameraRepo;
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @org.springframework.beans.factory.annotation.Value("${IA_SERVICE_URL:http://host.docker.internal:8000}")
+    private String iaServiceBaseUrl;
 
     /**
      * Este é o método que será chamado quando o Python enviar um POST.
@@ -48,40 +54,69 @@ public class ProcessamentoIAService {
         // 2. Salvar o Avistamento no Banco
         AvistamentoIA salvo = avistamentoRepo.save(avistamento);
 
-        // 3. BUSCA INTELIGENTE: Primeiro por Raça, depois com Fallback Geoespacial
-        List<RelatoPerda> candidatos = new java.util.ArrayList<>();
-        String racaDetectada = avistamento.getFeatures() != null ? avistamento.getFeatures().getRacaEstimada() : null;
+        // 3. CHAMAR IA SERVICE PARA MATCHING REAL (Gemini multimodal)
+        try {
+            MetadadosVisuais features = salvo.getFeatures();
+            String raca = features != null ? features.getRacaEstimada() : "Desconhecida";
+            String cor = features != null ? features.getCorPredominante() : "";
+            String porte = features != null ? features.getPorteEstimado() : "";
+            Double confianca = features != null && features.getConfiancaDetecao() != null ? features.getConfiancaDetecao() : 0.0;
+            List<String> extras = features != null ? features.getCaracteristicasExtras() : null;
+            String detalhes = (extras != null && !extras.isEmpty()) ? String.join(", ", extras) : "";
 
-        if (racaDetectada != null && !racaDetectada.trim().isEmpty()) {
-            System.out.println("Buscando candidatos pela raça: " + racaDetectada);
-            candidatos = relatoRepo.buscarPorStatusERaca(StatusRelato.EM_BUSCA, racaDetectada);
+            Double lat = salvo.getCameraOrigem() != null && salvo.getCameraOrigem().getLatitude() != null
+                    ? salvo.getCameraOrigem().getLatitude() : 0.0;
+            Double lon = salvo.getCameraOrigem() != null && salvo.getCameraOrigem().getLongitude() != null
+                    ? salvo.getCameraOrigem().getLongitude() : 0.0;
+
+            Map<String, Object> iaPayload = new LinkedHashMap<>();
+            iaPayload.put("camera_id", codigoCamera);
+            iaPayload.put("snapshot_url", salvo.getSnapshotUrl());
+            iaPayload.put("raca_provavel", raca != null ? raca : "Desconhecida");
+            iaPayload.put("cor_predominante", cor != null ? cor : "");
+            iaPayload.put("porte", porte != null ? porte : "");
+            iaPayload.put("detalhes", detalhes);
+            iaPayload.put("latitude", lat);
+            iaPayload.put("longitude", lon);
+            iaPayload.put("confianca_detecao", confianca);
+
+            String iaUrl = iaServiceBaseUrl + "/api/avistamento/criar";
+            System.out.println("📡 Chamando IA Service para matching: " + iaUrl + " (raça: " + raca + ")");
+            ResponseEntity<Map> response = restTemplate.postForEntity(iaUrl, iaPayload, Map.class);
+
+            if (response.getBody() != null) {
+                List<Map<String, Object>> matches = (List<Map<String, Object>>) response.getBody().get("matches");
+                if (matches != null && !matches.isEmpty()) {
+                    int salvosCount = 0;
+                    for (Map<String, Object> matchData : matches) {
+                        try {
+                            String idCandidato = String.valueOf(matchData.get("id_candidato"));
+                            Number probNum = (Number) matchData.get("probabilidade_match");
+                            double probabilidade = probNum != null ? probNum.doubleValue() / 100.0 : 0.0;
+                            String justificativa = String.valueOf(matchData.getOrDefault("justificativa_visual_e_texto", ""));
+
+                            Optional<RelatoPerda> relatoOpt = relatoRepo.findById(UUID.fromString(idCandidato));
+                            if (relatoOpt.isPresent()) {
+                                Match match = new Match();
+                                match.setRelato(relatoOpt.get());
+                                match.setAvistamento(salvo);
+                                match.setScoreSimilaridade(probabilidade);
+                                match.setExplicacaoLLM(justificativa);
+                                match.setStatus(StatusMatch.PENDENTE_ANALISE);
+                                matchRepo.save(match);
+                                salvosCount++;
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Erro ao salvar match individual: " + e.getMessage());
+                        }
+                    }
+                    System.out.println("✅ " + salvosCount + " match(es) salvos via IA (avistamento → relatos perdidos).");
+                } else {
+                    System.out.println("ℹ️ IA não encontrou matches para este avistamento.");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ IA Service indisponível para matching de avistamento: " + e.getMessage());
         }
-
-        // FALLBACK: Se não achou nenhum cão da raça, ou a IA não informou a raça
-        if (candidatos.isEmpty()) {
-            System.out.println("Nenhum candidato da raça encontrado. Ativando fallback de Geolocalização (5km)...");
-            Double lat = salvo.getCameraOrigem() != null ? salvo.getCameraOrigem().getLatitude() : 0.0;
-            Double lon = salvo.getCameraOrigem() != null ? salvo.getCameraOrigem().getLongitude() : 0.0;
-
-            candidatos = relatoRepo.buscarPorRaio(lat, lon, 5.0); // 5km de raio
-        }
-
-        // 4. CRIAR MATCHES PRELIMINARES
-        for (RelatoPerda candidato : candidatos) {
-            
-            // Aqui poderíamos ter um filtro extra: "Só cria match se a cor for igual"
-            // Por enquanto, criamos match para todos no raio geográfico
-            
-            Match match = new Match();
-            match.setRelato(candidato);
-            match.setAvistamento(salvo);
-            match.setStatus(StatusMatch.PENDENTE_ANALISE);
-            match.setScoreSimilaridade(0.0); // O LLM vai preencher isso depois
-            match.setExplicacaoLLM("Match Geográfico: Avistado a menos de 5km do local de desaparecimento.");
-            
-            matchRepo.save(match);
-        }
-        
-        System.out.println("Processamento concluído. Matches gerados: " + candidatos.size());
     }
 }

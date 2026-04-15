@@ -108,6 +108,13 @@ public class RelatoService {
         return salvo;
     }
 
+    public RelatoPerda atualizarStatus(java.util.UUID id, StatusRelato novoStatus) {
+        RelatoPerda relato = relatoRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Relato não encontrado: " + id));
+        relato.setStatus(novoStatus);
+        return relatoRepository.save(relato);
+    }
+
     public boolean existsById(java.util.UUID id) {
         return relatoRepository.existsById(id);
     }
