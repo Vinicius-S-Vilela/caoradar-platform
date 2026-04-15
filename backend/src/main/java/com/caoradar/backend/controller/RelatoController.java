@@ -47,7 +47,36 @@ public class RelatoController {
         return ResponseEntity.ok(relatoService.listarPorTutor(tutor));
     }
     
- // GET /relatos?status=EM_BUSCA&cor=PRETO&raca=Poodle
+    // DELETE /relatos/{id}
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deletarRelato(@PathVariable UUID id) {
+        if (!relatoService.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        relatoService.deletarPorId(id);
+        return ResponseEntity.ok("Relato removido com sucesso");
+    }
+
+    // PUT /relatos/{id}/status
+    // Altera o status de um relato (ex: ENCONTRADO)
+    @PutMapping("/{id}/status")
+    public ResponseEntity<?> atualizarStatus(@PathVariable UUID id, @RequestBody java.util.Map<String, String> body) {
+        String statusStr = body.get("status");
+        if (statusStr == null) {
+            return ResponseEntity.badRequest().body("Campo 'status' é obrigatório");
+        }
+        try {
+            StatusRelato novoStatus = StatusRelato.valueOf(statusStr);
+            RelatoPerda atualizado = relatoService.atualizarStatus(id, novoStatus);
+            return ResponseEntity.ok(atualizado);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Status inválido: " + statusStr);
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // GET /relatos?status=EM_BUSCA&cor=PRETO&raca=Poodle
     @GetMapping
     public ResponseEntity<List<RelatoPerda>> listarComFiltros(
             @RequestParam(required = false) StatusRelato status,
