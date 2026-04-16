@@ -7,5 +7,14 @@
       "^/api-proxy": ""
     },
     "logLevel": "debug"
+  },
+  "/ia-proxy": {
+    "target": "https://palmapedroa-caoradar-iaservice.hf.space",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/ia-proxy": ""
+    },
+    "logLevel": "debug"
   }
 }
