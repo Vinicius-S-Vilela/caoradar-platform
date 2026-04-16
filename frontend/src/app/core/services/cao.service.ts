@@ -119,8 +119,8 @@ export class CaoService {
       nomeCao: caoCadastro.nome,
       descricao: descParts.join(' | ') || null,
       fotosUrl: caoCadastro.fotos?.length ? caoCadastro.fotos : [],
-      latitude: caoCadastro.localizacao.latitude || null,
-      longitude: caoCadastro.localizacao.longitude || null,
+      latitude: caoCadastro.localizacao.latitude ?? null,
+      longitude: caoCadastro.localizacao.longitude ?? null,
       dataDesaparecimento: caoCadastro.dataPerdido
         ? new Date(caoCadastro.dataPerdido).toISOString().slice(0, -1)
         : new Date().toISOString().slice(0, -1),

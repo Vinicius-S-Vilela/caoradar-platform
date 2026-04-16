@@ -307,6 +307,10 @@ import { User } from '../../core/models/user.model';
     .user-name {
       font-weight: 600;
       font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
     }
 
     .icon-dropdown {

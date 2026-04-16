@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 @RestController
 @RequestMapping("/api/video")
@@ -25,36 +26,31 @@ public class VideoController {
     }
 
     /**
-     * Recebe requisição do frontend e repassa para o IA Service.
-     * Frontend → Backend → IA Service (processamento de vídeo)
+     * Retorna 202 imediatamente e dispara o processamento da IA em background.
+     * Evita timeout no frontend (IA pode levar 60-120s).
      */
     @PostMapping("/processar")
     public ResponseEntity<?> processarVideo(@RequestBody ProcessarVideoDTO dto) {
-        System.out.println("🎬 Recebendo vídeo da câmera " + dto.cameraId + " para processamento IA");
+        System.out.println("🎬 Recebendo vídeo da câmera " + dto.cameraId + " — processamento em background");
 
-        try {
-            // Monta payload para o IA Service
-            Map<String, String> payload = Map.of(
-                "camera_origem_id", dto.cameraId,
-                "video_url", dto.videoUrl,
-                "data_hora", dto.dataHora
-            );
+        // Dispara em background e retorna 202 imediatamente
+        CompletableFuture.runAsync(() -> {
+            try {
+                Map<String, String> payload = Map.of(
+                    "camera_origem_id", dto.cameraId,
+                    "video_url",        dto.videoUrl,
+                    "data_hora",        dto.dataHora
+                );
+                String iaUrl = iaServiceUrl + "/api/video/process";
+                System.out.println("📡 [BG] Enviando para IA Service: " + iaUrl);
+                restTemplate.postForEntity(iaUrl, payload, Map.class);
+                System.out.println("✅ [BG] IA Service concluiu para câmera " + dto.cameraId);
+            } catch (Exception e) {
+                System.err.println("❌ [BG] Erro ao processar vídeo: " + e.getMessage());
+            }
+        });
 
-            String iaUrl = iaServiceUrl + "/api/video/process";
-            System.out.println("📡 Enviando para IA Service: " + iaUrl);
-
-            ResponseEntity<Map> response = restTemplate.postForEntity(iaUrl, payload, Map.class);
-
-            System.out.println("✅ IA Service respondeu: " + response.getStatusCode());
-            return ResponseEntity.ok(response.getBody());
-
-        } catch (Exception e) {
-            System.err.println("❌ Erro ao processar vídeo: " + e.getMessage());
-            return ResponseEntity.internalServerError()
-                .body(Map.of(
-                    "error", "Erro ao processar vídeo",
-                    "detail", e.getMessage()
-                ));
-        }
+        return ResponseEntity.accepted()
+            .body(Map.of("status", "processing", "message", "Vídeo recebido. Processamento iniciado em background."));
     }
 }

@@ -33,7 +33,7 @@ public class RelatoService {
     private String iaServiceBaseUrl;
 
     private String getPythonApiUrl() {
-        return iaServiceBaseUrl + "/api/relato/criar";
+        return iaServiceBaseUrl + "/api/match/relato";
     }
 
     public RelatoPerda criarRelato(RelatoPerda relato) {
@@ -48,22 +48,18 @@ public class RelatoService {
 
         // 3. Chama a IA para fazer matching com avistamentos existentes
         try {
-            // Monta payload compatível com CriarRelatoRequest do FastAPI
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("nome_cao", salvo.getNomeCao());
-            payload.put("descricao", salvo.getDescricao() != null ? salvo.getDescricao() : "");
-
-            // Pega a primeira foto do relato
+            // Monta payload compatível com MatchRelatoRequest do FastAPI
             List<String> fotos = salvo.getFotosUrl();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("relato_id", salvo.getId().toString());
+            payload.put("nome_cao", salvo.getNomeCao());
             payload.put("foto_url", (fotos != null && !fotos.isEmpty()) ? fotos.get(0) : "");
-
-            payload.put("latitude", salvo.getLatitude() != null ? salvo.getLatitude() : 0.0);
-            payload.put("longitude", salvo.getLongitude() != null ? salvo.getLongitude() : 0.0);
-            payload.put("data_desaparecimento", salvo.getDataDesaparecimento().toString());
             payload.put("raca", salvo.getRaca());
             payload.put("porte", salvo.getPorteInformado());
             payload.put("cor", salvo.getCorPredominante());
-            payload.put("tutor_id", salvo.getTutor().getId().toString());
+            payload.put("descricao", salvo.getDescricao() != null ? salvo.getDescricao() : "");
+            payload.put("latitude", salvo.getLatitude() != null ? salvo.getLatitude() : 0.0);
+            payload.put("longitude", salvo.getLongitude() != null ? salvo.getLongitude() : 0.0);
 
             String url = getPythonApiUrl();
             System.out.println("📡 Enviando relato para IA Service (" + url + "): " + salvo.getNomeCao());
