@@ -69,8 +69,8 @@ import { NotificationService } from '../../core/services/notification.service';
         <app-camera-card
           *ngFor="let camera of cameras; let i = index"
           [camera]="camera"
-          [uploadCount]="uploadStats[camera.id]?.count || 0"
-          [lastUploadDate]="uploadStats[camera.id]?.lastDate || null"
+          [uploadCount]="uploadStats[camera.id].count || 0"
+          [lastUploadDate]="uploadStats[camera.id].lastDate || null"
           (videoUploaded)="onVideoUpload($event, i)"
         ></app-camera-card>
       </div>

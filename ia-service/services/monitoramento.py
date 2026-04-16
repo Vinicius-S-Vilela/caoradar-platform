@@ -89,6 +89,7 @@ def _finalizar_evento(
     print(f"🛑 [CÃO {track_id}] Saiu da tela — processando...")
 
     try:
+        os.makedirs(FOLDER_TEMP, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         path_short = f"{FOLDER_TEMP}/temp_short_{track_id}.jpg"
         path_full  = f"{FOLDER_TEMP}/temp_full_{track_id}.jpg"
@@ -107,10 +108,12 @@ def _finalizar_evento(
         url_short = upload["secure_url"]
         print(f"   🔗 Snapshot: {url_short}")
 
-        # Classificação fenotípica via Gemini
+        # Classificação fenotípica via Gemini (bytes em memória para evitar race condition no cleanup)
+        with open(path_short, "rb") as f:
+            bytes_short = f.read()
         resp_class = agente_classificador.run(
             "Analise e classifique o cão na imagem.",
-            images=[AgnoImage(filepath=path_short)],
+            images=[AgnoImage(content=bytes_short)],
         )
         dados = extrair_json_robusto(resp_class.content)
 
@@ -251,7 +254,10 @@ def processar_video_best_shot(
                     if cao["amostra_referencia"] is None or cao["timer_ia"] >= frames_ia:
                         cao["timer_ia"] = 0
                         try:
-                            r_filtro = agente_filtro.run("Validar.", images=[AgnoImage(filepath=path_temp)])
+                            # Lê bytes imediatamente para evitar leitura lazy após cleanup da pasta
+                            with open(path_temp, "rb") as f:
+                                bytes_temp = f.read()
+                            r_filtro = agente_filtro.run("Validar.", images=[AgnoImage(content=bytes_temp)])
                             d_filtro = extrair_json_robusto(r_filtro.content)
                             if d_filtro and d_filtro.get("aprovado"):
                                 nova = {"crop": roi.copy(), "full_marked": frame_marcado, "frame": frame_idx}
@@ -260,9 +266,11 @@ def processar_video_best_shot(
                                     cao["amostra_referencia"] = nova
                                     cv2.imwrite(path_ref, roi)
                                 else:
+                                    with open(path_ref, "rb") as f:
+                                        bytes_ref = f.read()
                                     r_comp = agente_comparador.run(
                                         "Comparar.",
-                                        images=[AgnoImage(filepath=path_ref), AgnoImage(filepath=path_temp)],
+                                        images=[AgnoImage(content=bytes_ref), AgnoImage(content=bytes_temp)],
                                     )
                                     d_comp = extrair_json_robusto(r_comp.content)
                                     if d_comp and d_comp.get("melhor_imagem") == 2:

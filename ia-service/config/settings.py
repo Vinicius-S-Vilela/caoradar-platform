@@ -7,8 +7,8 @@ load_dotenv()
 # ==========================================
 # URLs DOS SERVIÇOS EXTERNOS
 # ==========================================
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8080")
-FRONTEND_URL    = os.getenv("FRONTEND_URL",    "http://localhost:4200")
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8080").strip()
+FRONTEND_URL    = os.getenv("FRONTEND_URL",    "http://localhost:4200").strip()
 
 # Origens permitidas no CORS (separadas por vírgula no .env)
 # Ex: CORS_ORIGINS=https://caoradar.vercel.app,http://localhost:4200

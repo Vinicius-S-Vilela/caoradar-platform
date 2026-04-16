@@ -188,14 +188,7 @@ import { AuthService } from '../../core/services/auth.service';
       margin-bottom: 2rem;
     }
 
-    // .register-logo {
-    //   width: 70px;
-    //   height: auto;
-    //   margin-bottom: 1rem;
-    // }
-
     .register-Logo {
-     // gap: 0.5rem;
       padding: 1.1rem 0rem 0.001rem;
       padding-left: 1.1rem;
       width: 200px;
@@ -214,7 +207,6 @@ import { AuthService } from '../../core/services/auth.service';
       font-size: 2rem;
       font-weight: 700;
       justify-content: flex-start;
-      //padding-top: 5vh;
       color: var(--gray-dark);
       margin-bottom: 0.5rem;
     }
