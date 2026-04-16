@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { NavbarComponent } from '../../shared/components/navbar.component';
 import { CaoService } from '../../core/services/cao.service';
+import { AuthService } from '../../core/services/auth.service';
 import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
 
 @Component({
@@ -34,13 +35,13 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
         <div class="grid" *ngIf="!loading">
           <div class="card" *ngFor="let cao of caesFiltrados">
             <div class="card-image">
-              <img [src]="cao.foto" [alt]="cao.nome" onError="this.src='assets/images/dog-placeholder.jpg'">
+              <img [src]="cao.foto" [alt]="cao.nome" onerror="this.onerror=null;this.src='assets/images/dog-placeholder.jpg'">
               <span class="badge badge-perdido">Perdido</span>
             </div>
             <div class="card-body">
               <h3>{{cao.nome}}</h3>
               <p class="raca">{{cao.raca}}</p>
-              <p class="info"><strong>Local:</strong> {{cao.localizacaoPerdido.bairro}}, {{cao.localizacaoPerdido.cidade}}</p>
+              <p class="info"><strong>Local:</strong> {{ getLocationText(cao) }}</p>
               <p class="info"><strong>Data:</strong> {{cao.dataPerdido | date:'dd/MM/yyyy'}}</p>
               <p class="info" *ngIf="cao.recompensa"><strong>Recompensa:</strong> R$ {{cao.recompensa}}</p>
               <div class="contact">
@@ -48,6 +49,9 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
                 <p>{{cao.contatoResponsavel.nome}}</p>
                 <p>{{cao.contatoResponsavel.telefone}}</p>
               </div>
+              <button *ngIf="isAdmin" class="btn-delete" (click)="deletarCao(cao)">
+                Remover relato
+              </button>
             </div>
           </div>
         </div>
@@ -84,6 +88,8 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
     .error-state p { color: var(--error-red); margin-bottom: 1rem; font-size: 1.1rem; }
     .loading-state { text-align: center; padding: 4rem 2rem; }
     .empty-state { text-align: center; padding: 4rem 2rem; color: var(--gray-text); font-size: 1.1rem; }
+    .btn-delete { margin-top: 1rem; width: 100%; padding: 0.6rem; background: var(--error-red); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-delete:hover { opacity: 0.85; }
   `]
 })
 export class CaesPerdidosComponent implements OnInit {
@@ -93,11 +99,27 @@ export class CaesPerdidosComponent implements OnInit {
   filtroRaca = '';
   loading = true;
   errorMessage = '';
+  isAdmin = false;
 
-  constructor(private caoService: CaoService) {}
+  constructor(
+    private caoService: CaoService,
+    private authService: AuthService
+  ) {}
 
   ngOnInit(): void {
+    this.isAdmin = this.authService.isAdmin();
     this.loadData();
+  }
+
+  deletarCao(cao: Cao): void {
+    if (!confirm(`Remover o relato de ${cao.nome}?`)) return;
+    this.caoService.deleteCao(cao.id).subscribe({
+      next: () => {
+        this.caesPerdidos = this.caesPerdidos.filter(c => c.id !== cao.id);
+        this.aplicarFiltro();
+      },
+      error: (err) => alert(err.message || 'Erro ao remover relato')
+    });
   }
 
   loadData(): void {
@@ -118,6 +140,11 @@ export class CaesPerdidosComponent implements OnInit {
 
   retry(): void {
     this.loadData();
+  }
+
+  getLocationText(cao: Cao): string {
+    const parts = [cao.localizacaoPerdido.bairro, cao.localizacaoPerdido.cidade, cao.localizacaoPerdido.estado].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : cao.descricao || 'Nao informado';
   }
 
   aplicarFiltro(): void {
