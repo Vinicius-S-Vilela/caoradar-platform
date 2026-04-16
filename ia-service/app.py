@@ -1,72 +1,62 @@
+"""
+CAORADAR IA Service
+====================
+API FastAPI responsável por:
+  - Processar vídeos de câmeras (YOLO + Gemini)
+  - Disparar matching de cães perdidos vs detectados
+
+Endpoints:
+  GET  /                        -> health check
+  POST /api/video/process       -> processa vídeo, detecta cães, salva avistamentos, faz matching
+  POST /api/match/relato        -> matching quando backend cria novo relato perdido
+
+Documentação interativa: /docs
+"""
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
-from config.settings import setup_apis
+from typing import Optional
+
+from config.settings import setup_apis, CORS_ORIGINS
 from services.monitoramento import processar_video_best_shot
-from services.ia_match import fazer_match_relato_perdido, fazer_match_avistamento_detectado
+from services.ia_match import fazer_match_relato_perdido
 
 # ==========================================
-# INICIALIZAÇÃO DO FASTAPI
+# APP
 # ==========================================
+
 app = FastAPI(
-    title="CAORADAR IA Service API",
-    description="API para processamento de vídeos e busca por matches de cães",
-    version="1.0.0"
+    title="CAORADAR IA Service",
+    description="Processamento de vídeo e matching de cães com YOLO + Gemini",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
-# CORS: Permitir requisições do Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Mudar para URL específica em produção
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 1. Inicia as configurações de APIs
 setup_apis()
 
+
 # ==========================================
-# PYDANTIC MODELS (DTOs)
+# MODELS (DTOs)
 # ==========================================
 
 class ProcessarVideoRequest(BaseModel):
-    """DTO para requisição de processamento de vídeo"""
-    camera_origem_id: str  # UUID da câmera de origem
-    video_url: str         # URL do vídeo no Cloudinary
-    data_hora: str         # Data/hora do vídeo (ex: "2026-03-17T14:30:00")
-
-
-class CriarRelatoRequest(BaseModel):
-    """DTO para relatório de cão perdido (visão = PERDIDO)"""
-    tutor_id: Optional[str] = None  # ID do tutor (opcional, pode ser anônimo)
-    nome_cao: str          # Nome do cão
-    descricao: str         # Descrição (cor, características, etc)
-    foto_url: str          # URL da foto do cão
-    latitude: float        # Localização onde desapareceu
-    longitude: float
-    data_desaparecimento: str  # Data em que desapareceu
-    raca: Optional[str] = None    # Raça do cão (filtro principal do match)
-    porte: Optional[str] = None   # "Pequeno", "Médio", "Grande"
-    cor: Optional[str] = None     # Cor predominante
-
-
-class CriarAvistamentoRequest(BaseModel):
-    """DTO para avistamento detectado na câmera (visão = DETECTADO)"""
-    camera_id: str         # ID da câmera
-    snapshot_url: str      # URL da foto capturada
-    raca_provavel: str     # Raça identificada pela IA
-    cor_predominante: str  # Cor
-    porte: str             # Porte
-    detalhes: str          # Detalhes da detecção
-    latitude: float        # Coordenadas da câmera
-    longitude: float
-    confianca_detecao: float  # Score de confiança (0-100)
+    """Payload enviado pelo backend após upload de vídeo."""
+    camera_origem_id: str   # código da câmera (ex: CAM_001)
+    video_url: str          # URL pública do vídeo (Cloudinary)
+    data_hora: str          # ISO 8601, ex: "2026-04-15T14:30:00"
 
 
 class FeaturesAvistamento(BaseModel):
-    """Features extraídas pela IA (armazenadas como JSONB)"""
     racaEstimada: str
     corPredominante: str
     porte: str
@@ -75,208 +65,125 @@ class FeaturesAvistamento(BaseModel):
 
 
 class AvistamentoDetectado(BaseModel):
-    """Representa um cão detectado no vídeo"""
-    id: str                              # UUID gerado
-    created_at: str                      # Timestamp de criação
-    updated_at: str                      # Timestamp de atualização
-    camera_origem_id: Optional[str]      # FK para tb_cameras (pode ser nulo)
-    data_hora: str                       # Momento exato da detecção
-    snapshot_url: str                    # URL do recorte gerado pela IA
-    features: FeaturesAvistamento        # Pacote completo da IA
+    id: str
+    created_at: str
+    updated_at: str
+    camera_origem_id: Optional[str]
+    data_hora: str
+    snapshot_url: str
+    features: FeaturesAvistamento
 
 
 class ProcessarVideoResponse(BaseModel):
-    """Resposta de processamento de vídeo"""
     status: str
-    avistamentos: List[AvistamentoDetectado]
+    total_detectados: int
+    avistamentos: list[AvistamentoDetectado]
 
 
-class CriarRelatoResponse(BaseModel):
-    """Resposta de criação de relato"""
+class MatchRelatoRequest(BaseModel):
+    """Payload enviado pelo backend quando um novo relato de cão perdido é criado."""
+    relato_id: str
+    nome_cao: str
+    foto_url: str
+    raca: Optional[str] = None
+    porte: Optional[str] = None
+    cor: Optional[str] = None
+    descricao: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class MatchRelatoResponse(BaseModel):
     status: str
     relato_id: str
-    message: str
-    matches: Optional[List[dict]] = None
-
-
-class CriarAvistamentoResponse(BaseModel):
-    """Resposta de criação de avistamento"""
-    status: str
-    avistamento_id: str
-    message: str
-    matches: Optional[List[dict]] = None
+    total_matches: int
+    matches: list[dict]
 
 
 # ==========================================
-# ENDPOINTS REST
+# ENDPOINTS
 # ==========================================
 
 @app.get("/", tags=["Health"])
-async def root():
-    """Endpoint de health check"""
+def health_check():
     return {
-        "status": "🐕 CAORADAR IA Service está PRONTO!",
-        "version": "1.0.0",
-        "documentacao": "Acesse /docs para Swagger UI"
+        "status": "online",
+        "service": "CAORADAR IA Service",
+        "version": "2.0.0",
+        "docs": "/docs",
     }
 
 
-@app.post("/api/video/process", response_model=ProcessarVideoResponse, tags=["Video Processing"])
-def processar_video_admin(request: ProcessarVideoRequest):
+@app.post("/api/video/process", response_model=ProcessarVideoResponse, tags=["Video"])
+def processar_video(request: ProcessarVideoRequest):
     """
-    **ENDPOINT 1: Processamento de vídeo**
+    Processa um vídeo de câmera de segurança.
 
-    Recebe um vídeo e retorna todos os cães detectados com seus dados completos.
-    A IA irá:
-    1. Detectar cães com YOLO
-    2. Rastreá-los frame a frame
-    3. Capturar o melhor frame por cão
-    4. Classificar raça, cor, porte e detalhes com Gemini
-    5. Fazer upload do recorte no Cloudinary
-
-    **Executa sincronamente - retorna os avistamentos ao final**
+    Fluxo interno:
+    1. Baixa o vídeo (se URL remota)
+    2. Detecta e rastreia cães com YOLOv8
+    3. Seleciona o melhor frame por cão (filtro + comparação Gemini)
+    4. Classifica raça, cor, porte e detalhes (Gemini Pro)
+    5. Faz upload do recorte para Cloudinary
+    6. Salva avistamento no backend (PostgreSQL)
+    7. Executa matching automático contra relatos perdidos
     """
     try:
-        print(f"\n🎬 [API] Recebida requisição de processar vídeo: {request.camera_origem_id}")
-
+        print(f"\n🎬 [API] /api/video/process — câmera: {request.camera_origem_id}")
         registros = processar_video_best_shot(
             request.video_url,
             request.camera_origem_id,
-            request.data_hora
+            request.data_hora,
         )
-
         avistamentos = [AvistamentoDetectado(**r) for r in registros]
-
         return ProcessarVideoResponse(
             status="completed",
-            avistamentos=avistamentos
+            total_detectados=len(avistamentos),
+            avistamentos=avistamentos,
         )
-
     except Exception as e:
-        print(f"❌ Erro ao processar vídeo: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao processar vídeo: {str(e)}")
+        print(f"❌ Erro: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/relato/criar", response_model=CriarRelatoResponse, tags=["Lost Dog Reports"])
-async def criar_relato_cao_perdido(request: CriarRelatoRequest):
+@app.post("/api/match/relato", response_model=MatchRelatoResponse, tags=["Matching"])
+def match_relato(request: MatchRelatoRequest):
     """
-    **ENDPOINT 2: Criar relato de cão perdido**
-    
-    Usuário (tutor) envia dados de um cão PERDIDO.
-    A IA irá:
-    1. Salvar os dados do relato
-    2. Buscar matches em avistamentos detectados (visão = DETECTADO)
-    3. Retornar candidates que podem ser o seu cão
-    
-    **Executa sincronamente - retorna matches imediatamente**
+    Dispara matching para um relato de cão perdido recém-criado.
+    Deve ser chamado pelo backend após persistir um novo relato.
+
+    Retorna os candidatos ordenados por probabilidade de match (desc).
     """
     try:
-        print(f"\n🐕 [API] Novo relato de cão perdido: {request.nome_cao}")
-        
-        # Validações
-        if not request.nome_cao or not request.foto_url:
-            raise HTTPException(status_code=400, detail="nome_cao e foto_url são obrigatórios")
-        
-        # Gerar ID do relato
-        relato_id = f"REL_{request.tutor_id or 'ANONIMO'}_{request.nome_cao.replace(' ', '_')}"
-        
-        # Preparar dados para matching
+        print(f"\n🐕 [API] /api/match/relato — {request.nome_cao} (ID: {request.relato_id})")
         relato_data = {
-            'relato_id': relato_id,
-            'tutor_id': request.tutor_id,
-            'nome_cao': request.nome_cao,
-            'descricao': request.descricao,
-            'foto_url': request.foto_url,
-            'latitude': request.latitude,
-            'longitude': request.longitude,
-            'data_desaparecimento': request.data_desaparecimento,
-            'raca_provavel_estimada': request.raca,
-            'porte': request.porte,
-            'cor': request.cor,
+            "relato_id":              request.relato_id,
+            "nome_cao":               request.nome_cao,
+            "foto_url":               request.foto_url,
+            "raca_provavel_estimada": request.raca,
+            "porte":                  request.porte,
+            "cor":                    request.cor,
+            "descricao":              request.descricao,
+            "latitude":               request.latitude,
+            "longitude":              request.longitude,
         }
-        
-        # FAZER MATCHING (dados vêm do PostgreSQL via API do backend)
-        print(f"🔍 Iniciando busca de matches para {request.nome_cao}...")
         matches = fazer_match_relato_perdido(relato_data)
-        
-        return CriarRelatoResponse(
-            status="created",
-            relato_id=relato_id,
-            message=f"{len(matches)} match(es) encontrado(s) para {request.nome_cao}." if matches else f"Nenhum match encontrado para {request.nome_cao} no momento.",
-            matches=matches
+        return MatchRelatoResponse(
+            status="completed",
+            relato_id=request.relato_id,
+            total_matches=len(matches),
+            matches=matches,
         )
-    
     except Exception as e:
-        print(f"❌ Erro ao criar relato: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao criar relato: {str(e)}")
-
-
-@app.post("/api/avistamento/criar", response_model=CriarAvistamentoResponse, tags=["Sightings"])
-async def criar_avistamento_detector(request: CriarAvistamentoRequest):
-    """
-    **ENDPOINT 3: Criar avistamento (cão detectado na câmera)**
-    
-    Quando um cão é detectado por câmera (já processado pela IA).
-    A IA irá:
-    1. Registrar o avistamento
-    2. Buscar matches em relatos de cães PERDIDOS
-    3. Notificar tutores de possíveis matches
-    
-    **Executa sincronamente - retorna matches imediatamente**
-    """
-    try:
-        print(f"\n📹 [API] Novo avistamento detectado na câmera: {request.camera_id}")
-        
-        # Validações
-        if not request.camera_id or not request.snapshot_url:
-            raise HTTPException(status_code=400, detail="camera_id e snapshot_url são obrigatórios")
-        
-        # Gerar ID do avistamento
-        avistamento_id = f"AVS_{request.camera_id}_{request.raca_provavel.replace(' ', '_')}"
-        
-        # Preparar dados para matching
-        avistamento_data = {
-            'avistamento_id': avistamento_id,
-            'camera_id': request.camera_id,
-            'snapshot_url': request.snapshot_url,
-            'raca_provavel': request.raca_provavel,
-            'cor_predominante': request.cor_predominante,
-            'porte': request.porte,
-            'detalhes': request.detalhes,
-            'latitude': request.latitude,
-            'longitude': request.longitude,
-            'confianca_detecao': request.confianca_detecao
-        }
-        
-        # FAZER MATCHING
-        print(f"🔍 Iniciando busca de matches para avistamento {request.raca_provavel}...")
-        matches = fazer_match_avistamento_detectado(avistamento_data)
-        
-        return CriarAvistamentoResponse(
-            status="created",
-            avistamento_id=avistamento_id,
-            message=f"Avistamento registrado: {request.raca_provavel}. {len(matches)} matches encontrados!",
-            matches=matches
-        )
-    
-    except Exception as e:
-        print(f"❌ Erro ao criar avistamento: {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao criar avistamento: {str(e)}")
+        print(f"❌ Erro: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==========================================
-# TESTES LOCAIS (Descomente para testar)
+# EXECUÇÃO LOCAL
 # ==========================================
 
 if __name__ == "__main__":
     import uvicorn
-    
-    print("\n🚀 Iniciando CAORADAR IA Service...")
-    print("📚 Documentação: http://localhost:8000/docs")
-    
-    # Rodar o servidor
-    uvicorn.run(
-        "app:app",
-        host="0.0.0.0",     
-        port=8000  # Recarrega ao salvar arquivo (desabilitar em produção)
-    )
+    print("\n🚀 CAORADAR IA Service — http://localhost:8000/docs")
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
