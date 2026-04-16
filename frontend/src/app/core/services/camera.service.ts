@@ -1,44 +1,70 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
-import { Camera, CAMERAS_DISPONIVEIS, UploadResponse } from '../models/camera.model';
+import { Observable, of } from 'rxjs';
+import { switchMap, catchError } from 'rxjs/operators';
+import { Camera, UploadResponse } from '../models/camera.model';
+import { ApiService } from './api.service';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
-/**
- * Serviço de gerenciamento de câmeras
- * Responsável por enviar vídeos para o backend
- */
 @Injectable({
   providedIn: 'root'
 })
 export class CameraService {
-  
-  // ⚙️ CONFIGURAÇÃO: Altere para 'true' para testar SEM backend
-  private readonly USE_MOCK_MODE = true; // ← MUDE PARA true PARA TESTAR SEM BACKEND
-  
-  // URL base da API (usada apenas quando USE_MOCK_MODE = false)
-  private readonly API_URL = '/api/cameras';
+
+  private cameras: Camera[] = [];
+  private camerasLoaded = false;
+
+  private readonly cloudinaryVideoUrl = `https://api.cloudinary.com/v1_1/${environment.cloudinary.cloudName}/video/upload`;
+  private readonly uploadPreset = environment.cloudinary.uploadPreset;
+
+  constructor(
+    private api: ApiService,
+    private http: HttpClient
+  ) {}
 
   /**
-   * Retorna todas as câmeras disponíveis
+   * Busca câmeras do banco via API do backend
+   */
+  loadCameras(): Observable<Camera[]> {
+    return this.api.get<Camera[]>('/cameras/ativas').pipe(
+      switchMap(cameras => {
+        this.cameras = cameras.map(cam => ({
+          ...cam,
+          nome: cam.codigoExterno,
+          descricao: cam.enderecoLogradouro || 'Sem endereço',
+          localizacao: this.extrairCidade(cam.enderecoLogradouro)
+        }));
+        this.camerasLoaded = true;
+        return of(this.cameras);
+      }),
+      catchError(err => {
+        console.error('Erro ao carregar câmeras:', err);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Retorna câmeras já carregadas (sync)
    */
   getCameras(): Camera[] {
-    return CAMERAS_DISPONIVEIS;
+    return this.cameras;
   }
 
   /**
    * Retorna uma câmera específica por ID
    */
   getCameraById(id: string): Camera | undefined {
-    return CAMERAS_DISPONIVEIS.find(cam => cam.id === id);
+    return this.cameras.find(cam => cam.id === id);
   }
 
   /**
-   * Faz upload de vídeo com monitoramento de progresso
-   * @param cameraId ID da câmera
-   * @param videoFile Arquivo de vídeo
-   * @param onProgress Callback para atualizar progresso
+   * Fluxo completo:
+   * 1. Upload vídeo para Cloudinary
+   * 2. Envia URL + cameraId para backend → IA Service
    */
   uploadWithProgress(
-    cameraId: string, 
+    cameraId: string,
     videoFile: File,
     onProgress?: (progress: number) => void
   ): Observable<UploadResponse> {
@@ -50,144 +76,94 @@ export class CameraService {
       });
     }
 
-    // 🎯 MODO SIMULADO (para testes sem backend)
-    if (this.USE_MOCK_MODE) {
-      return this.uploadMockMode(cameraId, videoFile, onProgress);
-    }
-
-    // 🌐 MODO REAL (requisição para API)
-    return this.uploadRealMode(cameraId, videoFile, onProgress);
-  }
-
-  /**
-   * 🎭 MODO SIMULADO - Simula upload sem backend
-   */
-  private uploadMockMode(
-    cameraId: string,
-    videoFile: File,
-    onProgress?: (progress: number) => void
-  ): Observable<UploadResponse> {
-    console.log('🎭 MODO SIMULADO ATIVADO - Simulando upload...');
-    console.log('📹 Câmera:', cameraId);
-    console.log('📁 Arquivo:', videoFile.name, '(' + this.formatFileSize(videoFile.size) + ')');
-
     return new Observable<UploadResponse>(observer => {
-      let progress = 0;
-      
-      // Simula progresso gradual
-      const progressInterval = setInterval(() => {
-        progress += Math.random() * 20;
-        
-        if (progress > 100) {
-          progress = 100;
-        }
+      // ETAPA 1: Upload do vídeo para Cloudinary
+      console.log('☁️ Etapa 1: Enviando vídeo para Cloudinary...');
 
-        // Atualiza callback de progresso
-        if (onProgress) {
-          onProgress(Math.floor(progress));
-        }
+      const formData = new FormData();
+      formData.append('file', videoFile);
+      formData.append('upload_preset', this.uploadPreset);
+      formData.append('folder', 'cao_radar/videos');
+      formData.append('resource_type', 'video');
 
-        // Quando chega em 100%, finaliza
-        if (progress >= 100) {
-          clearInterval(progressInterval);
-          
-          // Aguarda um pouco para efeito visual
-          setTimeout(() => {
-            const mockResponse: UploadResponse = {
-              success: true,
-              message: `✅ Vídeo "${videoFile.name}" enviado com sucesso! (SIMULADO)`,
-              cameraId: cameraId,
-              fileName: videoFile.name,
-              uploadedAt: new Date()
-            };
-
-            console.log('✅ Upload simulado concluído:', mockResponse);
-            observer.next(mockResponse);
-            observer.complete();
-          }, 500);
-        }
-      }, 300); // Atualiza a cada 300ms
-    });
-  }
-
-  /**
-   * 🌐 MODO REAL - Faz upload real para API
-   */
-  private uploadRealMode(
-    cameraId: string,
-    videoFile: File,
-    onProgress?: (progress: number) => void
-  ): Observable<UploadResponse> {
-    console.log('🌐 MODO REAL ATIVADO - Enviando para API...');
-    console.log('🔗 URL:', `${this.API_URL}/upload`);
-    console.log('📹 Câmera:', cameraId);
-    console.log('📁 Arquivo:', videoFile.name);
-
-    const formData = new FormData();
-    formData.append('cameraId', cameraId);
-    formData.append('video', videoFile);
-
-    const uploadUrl = `${this.API_URL}/upload`;
-
-    return new Observable<UploadResponse>(observer => {
       const xhr = new XMLHttpRequest();
 
-      // Monitora o progresso do upload
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable && onProgress) {
-          const progress = Math.round((event.loaded / event.total) * 100);
+          // Cloudinary upload = 0-80% do progresso total
+          const progress = Math.round((event.loaded / event.total) * 80);
           onProgress(progress);
-          console.log(`📊 Progresso: ${progress}%`);
         }
       });
 
-      // Upload concluído com sucesso
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            const response = JSON.parse(xhr.responseText);
-            console.log('✅ Upload concluído:', response);
-            observer.next(response);
-            observer.complete();
+            const cloudinaryResponse = JSON.parse(xhr.responseText);
+            const videoUrl = cloudinaryResponse.secure_url;
+            console.log('✅ Vídeo no Cloudinary:', videoUrl);
+
+            if (onProgress) onProgress(85);
+
+            // ETAPA 2: Enviar para processamento (Backend → IA)
+            console.log('🤖 Etapa 2: Enviando para processamento IA...');
+
+            // Buscar codigoExterno da câmera
+            const camera = this.cameras.find(c => c.id === cameraId);
+            const codigoCamera = camera?.codigoExterno || cameraId;
+
+            this.api.post<any>('/api/video/processar', {
+              cameraId: codigoCamera,
+              videoUrl: videoUrl,
+              dataHora: new Date().toISOString()
+            }).subscribe({
+              next: (iaResponse) => {
+                console.log('✅ IA processou:', iaResponse);
+                if (onProgress) onProgress(100);
+
+                const avistamentos = iaResponse?.avistamentos || [];
+                observer.next({
+                  success: true,
+                  message: `Vídeo processado! ${avistamentos.length} cão(es) detectado(s).`,
+                  cameraId: cameraId,
+                  fileName: videoFile.name,
+                  uploadedAt: new Date(),
+                  avistamentos: avistamentos
+                });
+                observer.complete();
+              },
+              error: (err) => {
+                console.error('❌ Erro no processamento IA:', err);
+                // Vídeo foi para Cloudinary, mas IA falhou
+                observer.next({
+                  success: true,
+                  message: `Vídeo enviado ao Cloudinary, mas o processamento IA falhou: ${err.message}`,
+                  cameraId: cameraId,
+                  fileName: videoFile.name,
+                  uploadedAt: new Date()
+                });
+                observer.complete();
+              }
+            });
+
           } catch (error) {
-            console.error('❌ Erro ao processar resposta:', error);
-            observer.error(new Error('Erro ao processar resposta do servidor'));
+            observer.error(new Error('Erro ao processar resposta do Cloudinary'));
           }
         } else {
-          let errorMessage = `Erro HTTP: ${xhr.status}`;
-          try {
-            const errorData = JSON.parse(xhr.responseText);
-            errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            // Ignora erro de parse
-          }
-          console.error('❌ Erro no upload:', errorMessage);
-          observer.error(new Error(errorMessage));
+          observer.error(new Error(`Erro no upload do Cloudinary: HTTP ${xhr.status}`));
         }
       });
 
-      // Erro de conexão
       xhr.addEventListener('error', () => {
-        console.error('❌ Erro de conexão com o servidor');
-        observer.error(new Error('Erro de conexão com o servidor. Verifique se o backend está rodando.'));
+        observer.error(new Error('Erro de conexão com Cloudinary'));
       });
 
-      // Timeout
+      xhr.timeout = 300000; // 5 minutos para vídeos grandes
       xhr.addEventListener('timeout', () => {
-        console.error('❌ Timeout na requisição');
-        observer.error(new Error('Timeout: o servidor demorou muito para responder'));
+        observer.error(new Error('Timeout no upload do vídeo'));
       });
 
-      // Configura timeout (30 segundos)
-      xhr.timeout = 30000;
-
-      // Envia a requisição
-      xhr.open('POST', uploadUrl);
-      
-      // Adicione headers de autenticação se necessário
-      // xhr.setRequestHeader('Authorization', 'Bearer seu-token-aqui');
-      
-      console.log('🚀 Enviando requisição...');
+      xhr.open('POST', this.cloudinaryVideoUrl);
       xhr.send(formData);
     });
   }
@@ -196,47 +172,34 @@ export class CameraService {
    * Valida se o arquivo é um vídeo válido
    */
   validateVideoFile(file: File): { valid: boolean; error?: string } {
-    // Verifica tipo
     if (!file.type.startsWith('video/')) {
       return { valid: false, error: 'O arquivo deve ser um vídeo' };
     }
 
-    // Verifica tamanho (100MB)
-    const maxSize = 100 * 1024 * 1024;
+    const maxSize = 100 * 1024 * 1024; // 100MB
     if (file.size > maxSize) {
       return { valid: false, error: 'O vídeo deve ter no máximo 100MB' };
     }
 
-    // Tipos de vídeo aceitos
     const acceptedTypes = [
-      'video/mp4',
-      'video/webm',
-      'video/ogg',
-      'video/quicktime',
-      'video/x-msvideo',
-      'video/x-matroska'
+      'video/mp4', 'video/webm', 'video/ogg',
+      'video/quicktime', 'video/x-msvideo', 'video/x-matroska'
     ];
 
     if (!acceptedTypes.includes(file.type)) {
-      return { 
-        valid: false, 
-        error: 'Formato não suportado. Use MP4, WebM, MOV ou MKV' 
-      };
+      return { valid: false, error: 'Formato não suportado. Use MP4, WebM, MOV ou MKV' };
     }
 
     return { valid: true };
   }
 
   /**
-   * Formata o tamanho do arquivo
+   * Extrai a cidade do endereço
    */
-  private formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  private extrairCidade(endereco: string | null): string {
+    if (!endereco) return '';
+    // Tenta extrair "Cidade - UF" do endereço
+    const match = endereco.match(/([^,]+- SP)/);
+    return match ? match[1].trim() : endereco.split(',').pop()?.trim() || '';
   }
 }

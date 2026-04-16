@@ -69,12 +69,16 @@ export class CaoService {
     const userId = this.authService.currentUserValue?.id;
 
     if (!userId) {
-      return throwError(() => new Error('Usuário não autenticado'));
+      console.warn('🔴 getMeusCaes: Usuário não autenticado');
+      return of([]);
     }
 
     return this.api.get<RelatoBackend[]>(`/relatos/tutor/${userId}`).pipe(
       map(relatos => (relatos || []).map(mapRelatoToCao)),
-      catchError(() => of([]))
+      catchError((err) => {
+        console.error('❌ getMeusCaes erro:', err);
+        return of([]);
+      })
     );
   }
 
@@ -106,16 +110,22 @@ export class CaoService {
       return throwError(() => new Error('Usuário não autenticado'));
     }
 
+    // Concatena localização textual na descrição (backend não tem campo endereço)
+    const loc = caoCadastro.localizacao;
+    const locationStr = [loc.bairro, loc.cidade, loc.estado].filter(Boolean).join(', ');
+    const descParts = [locationStr, caoCadastro.descricao || caoCadastro.observacoes].filter(Boolean);
+
     const payload = {
       nomeCao: caoCadastro.nome,
-      descricao: caoCadastro.descricao || caoCadastro.observacoes || null,
+      descricao: descParts.join(' | ') || null,
       fotosUrl: caoCadastro.fotos?.length ? caoCadastro.fotos : [],
       latitude: caoCadastro.localizacao.latitude || null,
       longitude: caoCadastro.localizacao.longitude || null,
       dataDesaparecimento: caoCadastro.dataPerdido
         ? new Date(caoCadastro.dataPerdido).toISOString().slice(0, -1)
         : new Date().toISOString().slice(0, -1),
-      porteInformado: caoCadastro.raca || null,
+      raca: caoCadastro.raca || null,
+      porteInformado: caoCadastro.porte || null,
       corPredominante: caoCadastro.cor || null
     };
 
@@ -137,25 +147,24 @@ export class CaoService {
   }
 
   /**
-   * Marca um cão como encontrado
-   * NOTA: O backend não possui endpoint para alterar status do relato.
-   * Operação não disponível no momento.
+   * Marca um cão como encontrado via PUT /relatos/{id}/status
    */
-  marcarComoEncontrado(
-    id: string,
-    localizacaoEncontrado: Cao['localizacaoEncontrado'],
-    observacoes?: string
-  ): Observable<Cao> {
-    return throwError(() => new Error('Funcionalidade não disponível no momento'));
+  marcarComoEncontrado(id: string): Observable<Cao> {
+    return this.api.put<RelatoBackend>(`/relatos/${id}/status`, { status: 'ENCONTRADO' }).pipe(
+      map(relato => mapRelatoToCao(relato)),
+      catchError((error) => {
+        return throwError(() => new Error(error.message || 'Erro ao atualizar status'));
+      })
+    );
   }
 
-  /**
-   * Deleta um cão
-   * NOTA: O backend não possui endpoint DELETE /relatos/{id}.
-   * Operação não disponível no momento.
-   */
   deleteCao(id: string): Observable<boolean> {
-    return throwError(() => new Error('Funcionalidade não disponível no momento'));
+    return this.api.delete<any>(`/relatos/${id}`).pipe(
+      map(() => true),
+      catchError((error) => {
+        return throwError(() => new Error(error.message || 'Erro ao excluir'));
+      })
+    );
   }
 
   /**

@@ -2,16 +2,13 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { environment } from '../../../environments/environment';
 
-/**
- * Serviço centralizado de comunicação com a API
- * Base URL: https://api-caoradar.onrender.com
- */
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
-  private readonly BASE_URL = '/api-proxy';
+  private readonly BASE_URL = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 
@@ -66,7 +63,7 @@ export class ApiService {
     } else if (error.status === 404) {
       message = 'Recurso não encontrado';
     } else if (error.status === 500) {
-      message = 'Erro ao processar. Verifique se email ou CPF já estão cadastrados.';
+      message = error.error?.message || 'Erro interno no servidor.';
     }
 
     return throwError(() => new Error(message));
