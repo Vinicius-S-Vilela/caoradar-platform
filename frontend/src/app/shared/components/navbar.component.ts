@@ -198,11 +198,6 @@ import { User } from '../../core/models/user.model';
       transform: scale(1.1);
     }
 
-    // .logo-img {
-    //   height: 40px;
-    //   width: auto;
-    // }
-
     .logo-text {
       background: linear-gradient(135deg, var(--primary-blue), var(--primary-blue-dark));
       -webkit-background-clip: text;

@@ -1,5 +1,5 @@
-import { Component, ElementRef, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, ElementRef, ViewChild, AfterViewInit, NgZone } from '@angular/core';
+import { CommonModule, DecimalPipe } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { NavbarComponent } from '../../shared/components/navbar.component';
@@ -8,11 +8,24 @@ import { AuthService } from '../../core/services/auth.service';
 import { CloudinaryService } from '../../core/services/cloudinary.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
+import * as L from 'leaflet';
+
+// Corrige ícone padrão do Leaflet com Webpack/Angular
+const DefaultIcon = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 @Component({
   selector: 'app-cadastro-cao',
   standalone: true,
-  imports: [CommonModule, RouterModule, ReactiveFormsModule, NavbarComponent],
+  imports: [CommonModule, RouterModule, ReactiveFormsModule, NavbarComponent, DecimalPipe],
   template: `
     <app-navbar></app-navbar>
     <div class="page-content">
@@ -177,12 +190,8 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
               </small>
             </div>
 
+            <!-- LOCALIZAÇÃO -->
             <h3 style="margin: 2rem 0 1rem; font-size: 1.25rem;">Localizacao onde foi perdido</h3>
-
-            <div class="form-group">
-              <label class="form-label">Endereco *</label>
-              <input type="text" class="form-control" formControlName="endereco" placeholder="Rua, numero">
-            </div>
 
             <div class="form-row">
               <div class="form-group">
@@ -197,6 +206,35 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
                 <label class="form-label">Estado *</label>
                 <input type="text" class="form-control" formControlName="estado" placeholder="UF" maxlength="2">
               </div>
+            </div>
+
+            <!-- MAPA INTERATIVO -->
+            <div class="form-group">
+              <label class="form-label">Marque o local exato no mapa *</label>
+              <div class="map-actions">
+                <button type="button" class="btn-map-action" (click)="useMyLocation()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                  </svg>
+                  Usar minha localizacao
+                </button>
+                <button type="button" class="btn-map-action" (click)="searchOnMap()"
+                        [disabled]="!cadastroForm.get('cidade')?.value">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  Buscar cidade no mapa
+                </button>
+              </div>
+              <div #mapContainer class="map-picker"></div>
+              <p class="map-status" *ngIf="!selectedLat">
+                Clique no mapa ou arraste o marcador para indicar o local exato
+              </p>
+              <p class="map-status map-status--ok" *ngIf="selectedLat">
+                ✅ Local marcado:
+                {{ selectedLat | number:'1.4-4' }},
+                {{ selectedLng | number:'1.4-4' }}
+              </p>
             </div>
 
             <h3 style="margin: 2rem 0 1rem; font-size: 1.25rem;">Contato do Responsavel</h3>
@@ -230,7 +268,7 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
                 Cancelar
               </button>
               <button type="submit" class="btn btn-primary"
-                      [disabled]="cadastroForm.invalid || selectedFiles.length === 0 || loading"
+                      [disabled]="cadastroForm.invalid || selectedFiles.length === 0 || !selectedLat || loading"
                       style="flex: 1;">
                 {{ loading ? 'Processando...' : 'Cadastrar Cao' }}
               </button>
@@ -258,7 +296,7 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
     }
     .upload-area:hover, .upload-area.has-files {
       border-color: var(--primary-blue);
-      background: rgba(var(--primary-blue-rgb, 0, 100, 255), 0.04);
+      background: rgba(0, 100, 255, 0.04);
     }
     .upload-area p { margin: 0.5rem 0 0.25rem; font-size: 0.95rem; }
     .upload-area small { font-size: 0.8rem; }
@@ -272,6 +310,34 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
       border: none; cursor: pointer; font-size: 14px; line-height: 1;
       display: flex; align-items: center; justify-content: center;
     }
+
+    /* MAPA */
+    .map-actions {
+      display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;
+    }
+    .btn-map-action {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.45rem 0.9rem; border-radius: var(--radius-md, 8px);
+      background: white; border: 1.5px solid var(--primary-blue, #2563eb);
+      color: var(--primary-blue, #2563eb); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .btn-map-action:hover:not(:disabled) { background: var(--primary-blue, #2563eb); color: white; }
+    .btn-map-action:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .map-picker {
+      height: 320px;
+      border-radius: var(--radius-md, 8px);
+      overflow: hidden;
+      border: 2px solid #d1d5db;
+      transition: border-color 0.2s;
+    }
+    .map-picker:focus-within { border-color: var(--primary-blue, #2563eb); }
+
+    .map-status {
+      margin: 0.4rem 0 0; font-size: 0.82rem; color: var(--gray-text, #666);
+    }
+    .map-status--ok { color: #16a34a; font-weight: 600; }
 
     .error-banner {
       margin-top: 1rem; padding: 0.75rem 1rem;
@@ -312,7 +378,10 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
       border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; opacity: 0.3;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes pulse { 0%, 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.3; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.6; } }
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.3; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.6; }
+    }
 
     .ia-steps { margin-top: 1.5rem; text-align: left; display: inline-block; }
     .ia-step {
@@ -329,7 +398,6 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
     .ia-step.active .step-dot { background: var(--primary-blue, #2980b9); }
     .ia-step.done .step-dot { background: #27ae60; }
 
-    /* RESULTADO */
     .result-icon { font-size: 3.5rem; margin-bottom: 0.5rem; }
     .result-icon.match-found { animation: bounceIn 0.5s ease; }
     .result-icon.no-match { opacity: 0.6; }
@@ -355,17 +423,23 @@ import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
     .match-explain { margin: 0.25rem 0 0; font-size: 0.75rem; color: #888; font-style: italic; }
   `]
 })
-export class CadastroCaoComponent {
+export class CadastroCaoComponent implements AfterViewInit {
   @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('mapContainer') mapContainer!: ElementRef<HTMLDivElement>;
 
   cadastroForm: FormGroup;
   racas = RACAS_DISPONIVEIS;
   loading = false;
-  loadingMessage = '';
   errorMessage = '';
   selectedFiles: File[] = [];
   previewUrls: string[] = [];
   currentUser = this.authService.currentUserValue;
+
+  // Coordenadas selecionadas no mapa
+  selectedLat: number | undefined;
+  selectedLng: number | undefined;
+  private leafletMap!: L.Map;
+  private leafletMarker!: L.Marker;
 
   // IA processing state
   iaProcessing = false;
@@ -381,7 +455,8 @@ export class CadastroCaoComponent {
     private authService: AuthService,
     private cloudinary: CloudinaryService,
     private notificationService: NotificationService,
-    private router: Router
+    private router: Router,
+    private ngZone: NgZone
   ) {
     this.cadastroForm = this.fb.group({
       nome: ['', Validators.required],
@@ -391,7 +466,6 @@ export class CadastroCaoComponent {
       cor: [''],
       porte: [''],
       descricao: [''],
-      endereco: ['', Validators.required],
       bairro: [''],
       cidade: ['', Validators.required],
       estado: ['', Validators.required],
@@ -400,6 +474,101 @@ export class CadastroCaoComponent {
       contatoEmail: [this.currentUser?.email || '', [Validators.required, Validators.email]],
       observacoes: [''],
     });
+  }
+
+  ngAfterViewInit(): void {
+    // Pequeno delay para garantir que o container tem dimensões
+    setTimeout(() => this.initMap(), 100);
+  }
+
+  private initMap(): void {
+    const defaultLat = -23.55;
+    const defaultLng = -46.63;
+
+    this.leafletMap = L.map(this.mapContainer.nativeElement, { zoomControl: true })
+      .setView([defaultLat, defaultLng], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(this.leafletMap);
+
+    this.leafletMarker = L.marker([defaultLat, defaultLng], { draggable: true })
+      .addTo(this.leafletMap)
+      .bindPopup('Arraste ou clique no mapa para ajustar');
+
+    // Click no mapa move o marcador
+    this.leafletMap.on('click', (e: L.LeafletMouseEvent) => {
+      this.leafletMarker.setLatLng(e.latlng);
+      this.ngZone.run(() => {
+        this.selectedLat = e.latlng.lat;
+        this.selectedLng = e.latlng.lng;
+      });
+    });
+
+    // Drag do marcador atualiza coordenadas
+    this.leafletMarker.on('dragend', () => {
+      const pos = this.leafletMarker.getLatLng();
+      this.ngZone.run(() => {
+        this.selectedLat = pos.lat;
+        this.selectedLng = pos.lng;
+      });
+    });
+  }
+
+  useMyLocation(): void {
+    if (!navigator.geolocation) {
+      this.errorMessage = 'Geolocalização não suportada pelo navegador.';
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        this.ngZone.run(() => {
+          this.selectedLat = lat;
+          this.selectedLng = lng;
+          this.leafletMarker.setLatLng([lat, lng]);
+          this.leafletMap.setView([lat, lng], 16);
+        });
+      },
+      () => {
+        this.ngZone.run(() => {
+          this.errorMessage = 'Não foi possível obter sua localização. Marque manualmente no mapa.';
+        });
+      }
+    );
+  }
+
+  searchOnMap(): void {
+    const f = this.cadastroForm.value;
+    const query = [f.bairro, f.cidade, f.estado].filter(Boolean).join(', ') + ', Brasil';
+
+    fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+      { headers: { 'Accept-Language': 'pt-BR' } }
+    )
+      .then(r => r.json())
+      .then(data => {
+        if (data?.length) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          this.ngZone.run(() => {
+            this.leafletMarker.setLatLng([lat, lng]);
+            this.leafletMap.setView([lat, lng], 14);
+            // Não define selectedLat/Lng aqui — usuário ainda confirma clicando/arrastando
+          });
+        } else {
+          this.ngZone.run(() => {
+            this.errorMessage = 'Cidade não encontrada. Marque manualmente no mapa.';
+          });
+        }
+      })
+      .catch(() => {
+        this.ngZone.run(() => {
+          this.errorMessage = 'Erro ao buscar cidade. Marque manualmente no mapa.';
+        });
+      });
   }
 
   onFilesSelected(event: Event): void {
@@ -421,40 +590,20 @@ export class CadastroCaoComponent {
     this.previewUrls.splice(index, 1);
   }
 
-  private async geocodificarEndereco(bairro: string, cidade: string, estado: string): Promise<{ lat?: number; lng?: number }> {
-    const address = [bairro, cidade, estado].filter(Boolean).join(', ') + ', Brasil';
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`,
-        { headers: { 'Accept-Language': 'pt-BR' } }
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      }
-    } catch (e) {
-      console.warn('Geocodificação falhou, prosseguindo sem coordenadas.');
-    }
-    return {};
-  }
-
   onSubmit(): void {
-    if (this.cadastroForm.invalid || this.selectedFiles.length === 0) return;
+    if (this.cadastroForm.invalid || this.selectedFiles.length === 0 || !this.selectedLat) return;
 
     this.loading = true;
     this.iaProcessing = true;
     this.iaResult = null;
     this.iaMatches = [];
     this.iaStep = 1;
-    this.iaStepMessage = 'Obtendo localização...';
+    this.iaStepMessage = 'Enviando fotos para a nuvem...';
     this.errorMessage = '';
 
     const f = this.cadastroForm.value;
 
-    this.geocodificarEndereco(f.bairro, f.cidade, f.estado).then(coords => {
-      this.iaStepMessage = 'Enviando fotos para a nuvem...';
-
-      this.cloudinary.uploadImages(this.selectedFiles).subscribe({
+    this.cloudinary.uploadImages(this.selectedFiles).subscribe({
       next: (urls) => {
         this.iaStep = 2;
         this.iaStepMessage = 'Cadastrando relato e buscando matches...';
@@ -470,12 +619,12 @@ export class CadastroCaoComponent {
           fotos: urls,
           dataPerdido: new Date(),
           localizacao: {
-            endereco: f.endereco,
+            endereco: '',
             bairro: f.bairro || undefined,
             cidade: f.cidade,
             estado: f.estado,
-            latitude: coords.lat,
-            longitude: coords.lng
+            latitude: this.selectedLat,
+            longitude: this.selectedLng
           },
           contatoResponsavel: {
             nome: f.contatoNome,
@@ -489,7 +638,6 @@ export class CadastroCaoComponent {
             this.iaStep = 3;
             this.iaStepMessage = 'A IA esta comparando imagens...';
 
-            // Busca matches do relato recem-criado
             this.caoService.getMatches(cao.id).subscribe({
               next: (matches) => {
                 this.iaMatches = matches.filter(m => m.scoreSimilaridade >= 0.75);
@@ -497,7 +645,6 @@ export class CadastroCaoComponent {
                 this.iaResult = 'done';
                 this.loading = false;
 
-                // Notifica matches de alta probabilidade
                 matches.filter(m => m.scoreSimilaridade >= 0.75).forEach(m => {
                   this.notificationService.showMatch({
                     relatoId: cao.id,
@@ -509,7 +656,6 @@ export class CadastroCaoComponent {
                 });
               },
               error: () => {
-                // Match endpoint falhou mas cadastro deu certo
                 this.iaMatches = [];
                 this.iaProcessing = false;
                 this.iaResult = 'done';
@@ -532,7 +678,6 @@ export class CadastroCaoComponent {
         this.loading = false;
       }
     });
-    }); // fim geocodificarEndereco.then
   }
 
   goToMatches(): void {

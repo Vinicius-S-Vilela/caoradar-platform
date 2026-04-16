@@ -161,8 +161,8 @@ export function mapRelatoToCao(relato: RelatoBackend): Cao {
     status: statusMap[relato.status] || 'Perdido',
     dataPerdido: new Date(relato.dataDesaparecimento),
     localizacaoPerdido: {
-      latitude: relato.latitude || undefined,
-      longitude: relato.longitude || undefined,
+      latitude: relato.latitude ?? undefined,
+      longitude: relato.longitude ?? undefined,
       endereco: '',
       bairro,
       cidade,
