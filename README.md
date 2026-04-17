@@ -465,34 +465,6 @@ tb_users ──(1:N)──► tb_relatos_perda ──(1:N)──► tb_matches �
 
 > O frontend exibe apenas matches com score ≥ **75%**.
 
----
-
-## 🚢 Deploy em Produção
-
-| Serviço | Plataforma | URL |
-|---------|-----------|-----|
-| Frontend | Vercel | [caoradar.vercel.app](https://caoradar.vercel.app) |
-| Backend | Render (Docker) | [api-caoradar.onrender.com](https://api-caoradar.onrender.com) |
-| IA Service | HuggingFace Spaces | [palmapedroa-caoradar-iaservice.hf.space](https://palmapedroa-caoradar-iaservice.hf.space/docs) |
-| Banco de Dados | NeonDB | PostgreSQL serverless |
-| Imagens/Vídeos | Cloudinary | CDN global |
-
-<details>
-<summary><b>Passo a passo — Redeploy do Backend</b></summary>
-
-1. Fazer push para a branch configurada no Render
-2. Render detecta o `Dockerfile` em `/backend` e inicia rebuild automático
-3. Verificar variáveis de ambiente no painel do Render:
-   - `DB_URL` com `?sslmode=require` (NeonDB)
-   - `IA_SERVICE_URL=https://palmapedroa-caoradar-iaservice.hf.space`
-   - `CORS_ORIGINS=https://caoradar.vercel.app`
-
-> ⚠️ Nenhuma migration de banco é necessária — o Hibernate atualiza o schema automaticamente.
-
-</details>
-
----
-
 ## 👥 Equipe
 
 | Nome | GitHub |
