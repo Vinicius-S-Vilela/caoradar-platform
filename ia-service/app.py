@@ -82,9 +82,9 @@ class ProcessarVideoResponse(BaseModel):
 
 class MatchRelatoRequest(BaseModel):
     """Payload enviado pelo backend quando um novo relato de cão perdido é criado."""
-    relato_id: str
+    relato_id: Optional[str] = None   # opcional para compatibilidade com backend antigo
     nome_cao: str
-    foto_url: str
+    foto_url: Optional[str] = None
     raca: Optional[str] = None
     porte: Optional[str] = None
     cor: Optional[str] = None
@@ -147,6 +147,7 @@ def processar_video(request: ProcessarVideoRequest):
 
 
 @app.post("/api/match/relato", response_model=MatchRelatoResponse, tags=["Matching"])
+@app.post("/api/relato/criar", response_model=MatchRelatoResponse, tags=["Matching"])
 def match_relato(request: MatchRelatoRequest):
     """
     Dispara matching para um relato de cão perdido recém-criado.

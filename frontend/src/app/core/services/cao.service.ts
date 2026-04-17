@@ -110,17 +110,24 @@ export class CaoService {
       return throwError(() => new Error('Usuário não autenticado'));
     }
 
-    // Concatena localização textual na descrição (backend não tem campo endereço)
+    // Formato: "location | descricao_cao | observacoes_responsavel"
+    // Partes vazias ficam como string vazia para manter posição no split
     const loc = caoCadastro.localizacao;
     const locationStr = [loc.bairro, loc.cidade, loc.estado].filter(Boolean).join(', ');
-    const descParts = [locationStr, caoCadastro.descricao || caoCadastro.observacoes].filter(Boolean);
+    const descParts = [
+      locationStr || '',
+      caoCadastro.descricao || '',
+      caoCadastro.observacoes || ''
+    ];
+    // Remove apenas trailing vazios para não crescer desnecessariamente
+    while (descParts.length > 1 && descParts[descParts.length - 1] === '') descParts.pop();
 
     const payload = {
       nomeCao: caoCadastro.nome,
       descricao: descParts.join(' | ') || null,
       fotosUrl: caoCadastro.fotos?.length ? caoCadastro.fotos : [],
-      latitude: caoCadastro.localizacao.latitude || null,
-      longitude: caoCadastro.localizacao.longitude || null,
+      latitude: caoCadastro.localizacao.latitude ?? null,
+      longitude: caoCadastro.localizacao.longitude ?? null,
       dataDesaparecimento: caoCadastro.dataPerdido
         ? new Date(caoCadastro.dataPerdido).toISOString().slice(0, -1)
         : new Date().toISOString().slice(0, -1),

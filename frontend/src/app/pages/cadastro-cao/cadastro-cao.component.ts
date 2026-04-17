@@ -7,7 +7,7 @@ import { CaoService } from '../../core/services/cao.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CloudinaryService } from '../../core/services/cloudinary.service';
 import { NotificationService } from '../../core/services/notification.service';
-import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
+import { RACAS_DISPONIVEIS, MatchBackend, dedupMatches } from '../../core/models/cao.model';
 import * as L from 'leaflet';
 
 // Corrige ícone padrão do Leaflet com Webpack/Angular
@@ -193,18 +193,17 @@ L.Marker.prototype.options.icon = DefaultIcon;
             <!-- LOCALIZAÇÃO -->
             <h3 style="margin: 2rem 0 1rem; font-size: 1.25rem;">Localizacao onde foi perdido</h3>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Bairro</label>
-                <input type="text" class="form-control" formControlName="bairro" placeholder="Bairro">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Cidade *</label>
-                <input type="text" class="form-control" formControlName="cidade" placeholder="Cidade">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Estado *</label>
-                <input type="text" class="form-control" formControlName="estado" placeholder="UF" maxlength="2">
+            <div class="form-group">
+              <label class="form-label">Buscar no mapa</label>
+              <div class="search-row">
+                <input type="text" class="form-control" formControlName="enderecoSearch"
+                  placeholder="Ex: Rua das Flores, São Paulo, SP">
+                <button type="button" class="btn-search" (click)="searchOnMap()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  Buscar
+                </button>
               </div>
             </div>
 
@@ -217,13 +216,6 @@ L.Marker.prototype.options.icon = DefaultIcon;
                     <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
                   </svg>
                   Usar minha localizacao
-                </button>
-                <button type="button" class="btn-map-action" (click)="searchOnMap()"
-                        [disabled]="!cadastroForm.get('cidade')?.value">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                  </svg>
-                  Buscar cidade no mapa
                 </button>
               </div>
               <div #mapContainer class="map-picker"></div>
@@ -311,7 +303,23 @@ L.Marker.prototype.options.icon = DefaultIcon;
       display: flex; align-items: center; justify-content: center;
     }
 
-    /* MAPA */
+    /* BUSCA + MAPA */
+    .search-row {
+      display: flex; gap: 0.5rem;
+    }
+    .search-row .form-control {
+      flex: 1;
+    }
+    .btn-search {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0 1rem; border-radius: var(--radius-md, 8px);
+      background: var(--primary-blue, #2563eb); border: none;
+      color: white; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap; height: 42px;
+      transition: background 0.15s;
+    }
+    .btn-search:hover { background: var(--primary-blue-dark, #1d4ed8); }
+
     .map-actions {
       display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;
     }
@@ -466,9 +474,7 @@ export class CadastroCaoComponent implements AfterViewInit {
       cor: [''],
       porte: [''],
       descricao: [''],
-      bairro: [''],
-      cidade: ['', Validators.required],
-      estado: ['', Validators.required],
+      enderecoSearch: [''],
       contatoNome: [this.currentUser?.nome || '', Validators.required],
       contatoTelefone: [this.currentUser?.telefone || '', Validators.required],
       contatoEmail: [this.currentUser?.email || '', [Validators.required, Validators.email]],
@@ -541,12 +547,16 @@ export class CadastroCaoComponent implements AfterViewInit {
   }
 
   searchOnMap(): void {
-    const f = this.cadastroForm.value;
-    const query = [f.bairro, f.cidade, f.estado].filter(Boolean).join(', ') + ', Brasil';
+    const query = (this.cadastroForm.get('enderecoSearch')?.value || '').trim();
+    if (!query) {
+      this.errorMessage = 'Digite um endereço para buscar no mapa.';
+      return;
+    }
+    this.errorMessage = '';
 
     fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
-      { headers: { 'Accept-Language': 'pt-BR' } }
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query + ', Brasil')}`,
+      { headers: { 'Accept-Language': 'pt-BR', 'User-Agent': 'CaoRadar/1.0' } }
     )
       .then(r => r.json())
       .then(data => {
@@ -555,18 +565,18 @@ export class CadastroCaoComponent implements AfterViewInit {
           const lng = parseFloat(data[0].lon);
           this.ngZone.run(() => {
             this.leafletMarker.setLatLng([lat, lng]);
-            this.leafletMap.setView([lat, lng], 14);
-            // Não define selectedLat/Lng aqui — usuário ainda confirma clicando/arrastando
+            this.leafletMap.setView([lat, lng], 15);
+            // Não define selectedLat/Lng — usuário confirma clicando/arrastando
           });
         } else {
           this.ngZone.run(() => {
-            this.errorMessage = 'Cidade não encontrada. Marque manualmente no mapa.';
+            this.errorMessage = 'Endereço não encontrado. Tente ser mais específico ou marque no mapa.';
           });
         }
       })
       .catch(() => {
         this.ngZone.run(() => {
-          this.errorMessage = 'Erro ao buscar cidade. Marque manualmente no mapa.';
+          this.errorMessage = 'Erro ao buscar endereço. Marque manualmente no mapa.';
         });
       });
   }
@@ -619,10 +629,9 @@ export class CadastroCaoComponent implements AfterViewInit {
           fotos: urls,
           dataPerdido: new Date(),
           localizacao: {
-            endereco: '',
-            bairro: f.bairro || undefined,
-            cidade: f.cidade,
-            estado: f.estado,
+            endereco: f.enderecoSearch || '',
+            cidade: '',
+            estado: '',
             latitude: this.selectedLat,
             longitude: this.selectedLng
           },
@@ -640,12 +649,13 @@ export class CadastroCaoComponent implements AfterViewInit {
 
             this.caoService.getMatches(cao.id).subscribe({
               next: (matches) => {
-                this.iaMatches = matches.filter(m => m.scoreSimilaridade >= 0.75);
+                const unicos = dedupMatches(matches).filter(m => m.scoreSimilaridade >= 0.75);
+                this.iaMatches = unicos;
                 this.iaProcessing = false;
                 this.iaResult = 'done';
                 this.loading = false;
 
-                matches.filter(m => m.scoreSimilaridade >= 0.75).forEach(m => {
+                unicos.forEach(m => {
                   this.notificationService.showMatch({
                     relatoId: cao.id,
                     nomeCao: cao.nome,

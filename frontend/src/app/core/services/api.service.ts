@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -40,10 +40,11 @@ export class ApiService {
   }
 
   /**
-   * DELETE request
+   * DELETE request — responseType text evita erro de parse em respostas não-JSON
    */
   delete<T>(path: string): Observable<T> {
-    return this.http.delete<T>(`${this.BASE_URL}${path}`).pipe(
+    return this.http.delete(`${this.BASE_URL}${path}`, { responseType: 'text' }).pipe(
+      map(() => null as T),
       catchError(this.handleError)
     );
   }

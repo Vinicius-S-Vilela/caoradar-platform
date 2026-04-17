@@ -41,14 +41,24 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
             <div class="card-body">
               <h3>{{cao.nome}}</h3>
               <p class="raca">{{cao.raca}}</p>
-              <p class="info"><strong>Local:</strong> {{ getLocationText(cao) }}</p>
+              <p class="info">
+                <strong>Local:</strong>
+                <span *ngIf="addresses[cao.id]; else resolving">{{ addresses[cao.id] }}</span>
+                <ng-template #resolving>
+                  <span class="resolving">...</span>
+                </ng-template>
+              </p>
               <p class="info"><strong>Data:</strong> {{cao.dataPerdido | date:'dd/MM/yyyy'}}</p>
               <p class="info" *ngIf="cao.recompensa"><strong>Recompensa:</strong> R$ {{cao.recompensa}}</p>
               <div class="contact">
                 <p><strong>Contato:</strong></p>
                 <p>{{cao.contatoResponsavel.nome}}</p>
                 <p>{{cao.contatoResponsavel.telefone}}</p>
+                <p *ngIf="cao.contatoResponsavel.email">{{cao.contatoResponsavel.email}}</p>
               </div>
+              <p class="observacoes" *ngIf="cao.observacoes">
+                <strong>Observações:</strong> {{cao.observacoes}}
+              </p>
               <button *ngIf="isAdmin" class="btn-delete" (click)="deletarCao(cao)">
                 Remover relato
               </button>
@@ -82,8 +92,10 @@ import { Cao, RACAS_DISPONIVEIS } from '../../core/models/cao.model';
     .card-body h3 { margin: 0 0 0.5rem; }
     .raca { color: var(--primary-blue); font-weight: 600; margin: 0.5rem 0; }
     .info { margin: 0.5rem 0; font-size: 0.9rem; color: var(--gray-text); }
+    .resolving { color: #bbb; font-style: italic; }
     .contact { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-light); }
     .contact p { margin: 0.25rem 0; font-size: 0.9rem; }
+    .observacoes { margin-top: 0.75rem; font-size: 0.85rem; color: var(--gray-text); line-height: 1.4; }
     .error-state { text-align: center; padding: 4rem 2rem; }
     .error-state p { color: var(--error-red); margin-bottom: 1rem; font-size: 1.1rem; }
     .loading-state { text-align: center; padding: 4rem 2rem; }
@@ -100,6 +112,7 @@ export class CaesPerdidosComponent implements OnInit {
   loading = true;
   errorMessage = '';
   isAdmin = false;
+  addresses: Record<string, string> = {};
 
   constructor(
     private caoService: CaoService,
@@ -130,6 +143,7 @@ export class CaesPerdidosComponent implements OnInit {
         this.caesPerdidos = caes;
         this.caesFiltrados = caes;
         this.loading = false;
+        this.resolverEnderecos(caes);
       },
       error: (err) => {
         this.errorMessage = err.message || 'Erro ao carregar dados';
@@ -142,16 +156,55 @@ export class CaesPerdidosComponent implements OnInit {
     this.loadData();
   }
 
-  getLocationText(cao: Cao): string {
-    const parts = [cao.localizacaoPerdido.bairro, cao.localizacaoPerdido.cidade, cao.localizacaoPerdido.estado].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : cao.descricao || 'Nao informado';
+  aplicarFiltro(): void {
+    this.caesFiltrados = this.filtroRaca
+      ? this.caesPerdidos.filter(c => c.raca === this.filtroRaca)
+      : this.caesPerdidos;
   }
 
-  aplicarFiltro(): void {
-    if (this.filtroRaca) {
-      this.caesFiltrados = this.caesPerdidos.filter(c => c.raca === this.filtroRaca);
-    } else {
-      this.caesFiltrados = this.caesPerdidos;
+  private async resolverEnderecos(caes: Cao[]): Promise<void> {
+    for (const cao of caes) {
+      const lat = cao.localizacaoPerdido.latitude;
+      const lng = cao.localizacaoPerdido.longitude;
+
+      const textoCached = [cao.localizacaoPerdido.bairro, cao.localizacaoPerdido.cidade, cao.localizacaoPerdido.estado]
+        .filter(Boolean).join(', ');
+
+      if (textoCached) {
+        this.addresses[cao.id] = textoCached;
+        continue;
+      }
+
+      if (!lat || !lng) {
+        this.addresses[cao.id] = 'Localização não informada';
+        continue;
+      }
+
+      try {
+        const resp = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+          { headers: { 'Accept-Language': 'pt-BR', 'User-Agent': 'CaoRadar/1.0' } }
+        );
+        const data = await resp.json();
+        this.addresses[cao.id] = this.formatarEndereco(data);
+      } catch {
+        this.addresses[cao.id] = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+
+      // Respeita o limite de 1 req/s do Nominatim
+      await new Promise(r => setTimeout(r, 1100));
     }
+  }
+
+  private formatarEndereco(data: any): string {
+    const a = data?.address;
+    if (!a) return data?.display_name?.split(',').slice(0, 3).join(',').trim() || 'Endereço não encontrado';
+    const partes = [
+      a.road || a.pedestrian || a.path,
+      a.suburb || a.neighbourhood || a.quarter,
+      a.city || a.town || a.village || a.municipality,
+      a.state
+    ].filter(Boolean);
+    return partes.slice(0, 3).join(', ');
   }
 }

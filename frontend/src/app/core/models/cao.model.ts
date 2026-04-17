@@ -127,13 +127,14 @@ export function mapRelatoToCao(relato: RelatoBackend): Cao {
     'ARQUIVADO': 'Encontrado'
   };
 
-  // Parsea localização do campo descricao (formato: "Bairro, Cidade, UF | descricao")
-  // Só parseia localização se houver o separador ' | ' — sem ele, é descrição pura
+  // Formato do campo descricao: "location | descricao_cao | observacoes_responsavel"
+  // Registros antigos (2 partes): "location | texto" — texto vai para descricao, observacoes fica vazio
   const descRaw = relato.descricao || '';
   const hasLocationEncoding = descRaw.includes(' | ');
   const descParts = descRaw.split(' | ');
   const locationPart = hasLocationEncoding ? (descParts[0] || '') : '';
-  const descText = hasLocationEncoding ? descParts.slice(1).join(' | ') : descRaw;
+  const descText = hasLocationEncoding ? (descParts[1] || '') : descRaw;
+  const observacoesText = hasLocationEncoding && descParts.length >= 3 ? descParts.slice(2).join(' | ') : '';
   const locPieces = locationPart.split(', ');
 
   let bairro = '';
@@ -156,7 +157,8 @@ export function mapRelatoToCao(relato: RelatoBackend): Cao {
     nome: relato.nomeCao,
     raca: relato.raca || relato.porteInformado || 'Nao informado',
     cor: relato.corPredominante || undefined,
-    descricao: descText || relato.descricao || undefined,
+    descricao: descText || undefined,
+    observacoes: observacoesText || undefined,
     foto: relato.fotosUrl?.[0] || 'assets/images/dog-placeholder.jpg',
     status: statusMap[relato.status] || 'Perdido',
     dataPerdido: new Date(relato.dataDesaparecimento),
@@ -210,3 +212,20 @@ export const RACAS_DISPONIVEIS: RacaCao[] = [
   'Bulldog Francês',
   'Pastor Alemão'
 ];
+
+/**
+ * Remove matches duplicados pelo mesmo avistamento, mantendo o de maior score.
+ * Backend/IA pode retornar múltiplas linhas apontando para o mesmo avistamento.
+ */
+export function dedupMatches(matches: MatchBackend[]): MatchBackend[] {
+  const porAvistamento = new Map<string, MatchBackend>();
+  for (const m of matches) {
+    const avId = m.avistamento?.id;
+    if (!avId) continue;
+    const atual = porAvistamento.get(avId);
+    if (!atual || m.scoreSimilaridade > atual.scoreSimilaridade) {
+      porAvistamento.set(avId, m);
+    }
+  }
+  return Array.from(porAvistamento.values());
+}
