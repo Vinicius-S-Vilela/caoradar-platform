@@ -22,64 +22,33 @@ import { User } from '../../core/models/user.model';
 
         <!-- Menu Desktop -->
         <div class="navbar-menu" [class.active]="menuOpen">
-          <a 
-            routerLink="/caes-perdidos" 
-            routerLinkActive="active"
-            class="navbar-link"
-            (click)="closeMenu()"
-          >
-            Cães Perdidos
-          </a>
-          
-          <!-- Links para usuário autenticado -->
+
+          <!-- Links para usuário autenticado (ordem: Menu | Cães Perdidos | Matches | Meus Cães) -->
           <ng-container *ngIf="currentUser">
-            <a
-              routerLink="/menu"
-              routerLinkActive="active"
-              class="navbar-link"
-              (click)="closeMenu()"
-            >
+            <a routerLink="/menu" routerLinkActive="active" class="navbar-link" (click)="closeMenu()">
               Menu
             </a>
-
-            <a
-              routerLink="/matches"
-              routerLinkActive="active"
-              class="navbar-link"
-              (click)="closeMenu()"
-            >
+            <a routerLink="/caes-perdidos" routerLinkActive="active" class="navbar-link" (click)="closeMenu()">
+              Cães Perdidos
+            </a>
+            <a routerLink="/matches" routerLinkActive="active" class="navbar-link" (click)="closeMenu()">
               Matches
             </a>
-
-            <a
-              routerLink="/dashboard"
-              routerLinkActive="active"
-              class="navbar-link"
-              (click)="closeMenu()"
-            >
+            <a routerLink="/dashboard" routerLinkActive="active" class="navbar-link" (click)="closeMenu()">
               Meus Cães
             </a>
-
-            <a 
-              routerLink="/cadastro-cao" 
-              routerLinkActive="active"
-              class="navbar-link highlight"
-              (click)="closeMenu()"
-            >
+            <a routerLink="/cadastro-cao" routerLinkActive="active" class="navbar-link highlight" (click)="closeMenu()">
               Cadastrar Cão
             </a>
-
-            <!-- Link admin -->
-            <a 
-              *ngIf="currentUser.isAdmin"
-              routerLink="/admin" 
-              routerLinkActive="active"
-              class="navbar-link admin"
-              (click)="closeMenu()"
-            >
+            <a *ngIf="currentUser.isAdmin" routerLink="/admin" routerLinkActive="active" class="navbar-link admin" (click)="closeMenu()">
               Admin
             </a>
           </ng-container>
+
+          <!-- Não autenticado: só Cães Perdidos -->
+          <a *ngIf="!currentUser" routerLink="/caes-perdidos" routerLinkActive="active" class="navbar-link" (click)="closeMenu()">
+            Cães Perdidos
+          </a>
         </div>
 
         <!-- Área de usuário -->
@@ -105,15 +74,6 @@ import { User } from '../../core/models/user.model';
                   </div>
                 </div>
                 <div class="dropdown-divider"></div>
-                <a routerLink="/dashboard" class="dropdown-item" (click)="closeUserDropdown()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <rect x="3" y="3" width="7" height="7" rx="1"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1"/>
-                    <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1"/>
-                  </svg>
-                  Dashboard
-                </a>
                 <button class="dropdown-item" (click)="logout()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>

@@ -7,7 +7,7 @@ import { CaoService } from '../../core/services/cao.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CloudinaryService } from '../../core/services/cloudinary.service';
 import { NotificationService } from '../../core/services/notification.service';
-import { RACAS_DISPONIVEIS, MatchBackend } from '../../core/models/cao.model';
+import { RACAS_DISPONIVEIS, MatchBackend, dedupMatches } from '../../core/models/cao.model';
 import * as L from 'leaflet';
 
 // Corrige ícone padrão do Leaflet com Webpack/Angular
@@ -649,12 +649,13 @@ export class CadastroCaoComponent implements AfterViewInit {
 
             this.caoService.getMatches(cao.id).subscribe({
               next: (matches) => {
-                this.iaMatches = matches.filter(m => m.scoreSimilaridade >= 0.75);
+                const unicos = dedupMatches(matches).filter(m => m.scoreSimilaridade >= 0.75);
+                this.iaMatches = unicos;
                 this.iaProcessing = false;
                 this.iaResult = 'done';
                 this.loading = false;
 
-                matches.filter(m => m.scoreSimilaridade >= 0.75).forEach(m => {
+                unicos.forEach(m => {
                   this.notificationService.showMatch({
                     relatoId: cao.id,
                     nomeCao: cao.nome,

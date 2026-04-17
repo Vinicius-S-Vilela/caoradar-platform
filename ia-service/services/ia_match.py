@@ -11,12 +11,60 @@ Responsável por:
 """
 
 import json
+import math
 import requests
 from agno.media import Image as AgnoImage
 
 from core.agents import agente_match
 from core.utils import extrair_json_robusto
 from config.settings import BACKEND_API_URL
+
+
+# ==========================================
+# PESO DE PROXIMIDADE GEOGRÁFICA
+# ==========================================
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distância em km entre dois pontos (fórmula de Haversine)."""
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _peso_por_distancia(distancia_km: float) -> float:
+    """
+    Retorna multiplicador em [0.7, 1.0] baseado na distância:
+      0 km   → 1.00  |  15 km → 0.85  |  30+ km → 0.70
+    """
+    fator = min(1.0, distancia_km / 30.0)
+    return 1.0 - 0.3 * fator
+
+
+def _extrair_coord(obj: dict, *chaves_alias) -> tuple[float | None, float | None]:
+    """Tenta extrair (lat, lng) do dict usando aliases comuns."""
+    candidatos = [
+        ("latitude", "longitude"),
+        ("lat", "lng"),
+        ("lat", "lon"),
+    ]
+    for lat_k, lng_k in candidatos:
+        lat, lng = obj.get(lat_k), obj.get(lng_k)
+        if lat is not None and lng is not None:
+            try:
+                return float(lat), float(lng)
+            except (TypeError, ValueError):
+                continue
+    # procura dentro de sub-objetos comuns (cameraOrigem, camera, localizacao)
+    for sub in ("cameraOrigem", "camera", "localizacao", "location"):
+        inner = obj.get(sub)
+        if isinstance(inner, dict):
+            lat, lng = _extrair_coord(inner)
+            if lat is not None:
+                return lat, lng
+    return None, None
 
 
 # ==========================================
@@ -54,6 +102,7 @@ def buscar_avistamentos_por_raca(raca_alvo: str) -> list[dict]:
         candidatos = []
         for av in resp.json():
             features = av.get("features", {})
+            lat, lng = _extrair_coord(av)
             candidatos.append({
                 "id":                av.get("id"),
                 "snapshot_url":      av.get("snapshotUrl"),
@@ -62,6 +111,8 @@ def buscar_avistamentos_por_raca(raca_alvo: str) -> list[dict]:
                 "porte":             features.get("porteEstimado", ""),
                 "confianca_detecao": features.get("confiancaDetecao", 0),
                 "detalhes_observados": features.get("detalhesCao", ""),
+                "latitude":          lat,
+                "longitude":         lng,
             })
         print(f"🔍 [DB] {len(candidatos)} avistamento(s) de '{raca_alvo}' encontrado(s)")
         return candidatos
@@ -203,10 +254,12 @@ def fazer_match_relato_perdido(relato_data: dict) -> list[dict]:
     """
     Chamado quando um novo relato de cão PERDIDO é criado (pelo backend).
     Busca avistamentos detectados de mesma raça e retorna matches.
+    Aplica peso de proximidade geográfica quando coordenadas disponíveis.
     """
     nome      = relato_data.get("nome_cao", "?")
     raca      = relato_data.get("raca_provavel_estimada") or relato_data.get("raca") or "Desconhecida"
     relato_id = relato_data.get("relato_id") or relato_data.get("id", "")
+    lat_alvo, lng_alvo = _extrair_coord(relato_data)
 
     print(f"\n{'='*55}")
     print(f"🔍 [MATCH] RELATO PERDIDO → buscando avistamentos")
@@ -229,6 +282,8 @@ def fazer_match_relato_perdido(relato_data: dict) -> list[dict]:
     }
 
     matches = realizar_match_multimodal(alvo, candidatos)
+    matches = _aplicar_peso_distancia(matches, candidatos, lat_alvo, lng_alvo)
+
     if matches and relato_id:
         for m in matches:
             salvar_matches_no_backend(relato_id, m.get("id_candidato", ""), [m])
@@ -236,13 +291,44 @@ def fazer_match_relato_perdido(relato_data: dict) -> list[dict]:
     return matches
 
 
+def _aplicar_peso_distancia(
+    matches: list[dict],
+    candidatos: list[dict],
+    lat_alvo: float | None,
+    lng_alvo: float | None,
+) -> list[dict]:
+    """Multiplica o score pela proximidade (quando coordenadas existem)."""
+    if not matches or lat_alvo is None or lng_alvo is None:
+        return matches
+
+    por_id = {str(c.get("id")): c for c in candidatos}
+    for m in matches:
+        cand = por_id.get(str(m.get("id_candidato")))
+        if not cand:
+            continue
+        lat_c, lng_c = cand.get("latitude"), cand.get("longitude")
+        if lat_c is None or lng_c is None:
+            continue
+        dist = _haversine_km(lat_alvo, lng_alvo, lat_c, lng_c)
+        peso = _peso_por_distancia(dist)
+        score_original = m.get("probabilidade_match", 0)
+        score_ajustado = round(score_original * peso)
+        m["probabilidade_match"] = score_ajustado
+        m["distancia_km"] = round(dist, 2)
+        print(f"   📍 Cand {m.get('id_candidato')}: {dist:.1f}km → peso {peso:.2f} | {score_original}% → {score_ajustado}%")
+
+    return sorted(matches, key=lambda x: x.get("probabilidade_match", 0), reverse=True)
+
+
 def fazer_match_avistamento_detectado(avistamento_data: dict) -> list[dict]:
     """
     Chamado após um cão ser detectado em vídeo.
     Busca relatos perdidos de mesma raça e retorna matches.
+    Aplica peso de proximidade geográfica quando coordenadas disponíveis.
     """
     raca          = avistamento_data.get("raca_provavel", "Desconhecida")
     avistamento_id = avistamento_data.get("avistamento_id") or avistamento_data.get("id", "")
+    lat_alvo, lng_alvo = _extrair_coord(avistamento_data)
 
     print(f"\n{'='*55}")
     print(f"🔍 [MATCH] AVISTAMENTO → buscando relatos perdidos")
@@ -265,6 +351,8 @@ def fazer_match_avistamento_detectado(avistamento_data: dict) -> list[dict]:
     }
 
     matches = realizar_match_multimodal(alvo, candidatos)
+    matches = _aplicar_peso_distancia(matches, candidatos, lat_alvo, lng_alvo)
+
     if matches and avistamento_id:
         for m in matches:
             salvar_matches_no_backend(m.get("id_candidato", ""), avistamento_id, [m])

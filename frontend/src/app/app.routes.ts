@@ -4,7 +4,7 @@ import { authGuard, adminGuard, noAuthGuard } from './core/guards/auth.guard';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '/caes-perdidos',
+    redirectTo: '/menu',
     pathMatch: 'full'
   },
   {
@@ -53,6 +53,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: '/caes-perdidos'
+    redirectTo: '/menu'
   }
 ];

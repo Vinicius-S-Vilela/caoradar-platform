@@ -4,7 +4,7 @@ import { RouterModule } from '@angular/router';
 import { NavbarComponent } from '../../shared/components/navbar.component';
 import { CaoService } from '../../core/services/cao.service';
 import { AuthService } from '../../core/services/auth.service';
-import { MatchBackend, Cao } from '../../core/models/cao.model';
+import { MatchBackend, Cao, dedupMatches } from '../../core/models/cao.model';
 
 @Component({
   selector: 'app-caes-encontrados',
@@ -55,8 +55,16 @@ import { MatchBackend, Cao } from '../../core/models/cao.model';
 
             <div class="match-items">
               <div class="match-item high-score" *ngFor="let match of group.matches">
-                <img [src]="match.avistamento.snapshotUrl || 'assets/images/dog-placeholder.jpg'" alt="Avistamento" class="match-snapshot"
-                     onerror="this.onerror=null;this.src='assets/images/dog-placeholder.jpg'">
+                <div class="snapshot-wrap">
+                  <img [src]="match.avistamento.snapshotUrl || 'assets/images/dog-placeholder.jpg'" alt="Avistamento" class="match-snapshot"
+                       onerror="this.onerror=null;this.src='assets/images/dog-placeholder.jpg'">
+                  <button class="snapshot-zoom" (click)="openLightbox(match.avistamento.snapshotUrl)" title="Ver imagem completa">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+                    </svg>
+                  </button>
+                </div>
                 <div class="match-details">
                   <div class="match-top">
                     <span class="score-badge high">
@@ -86,6 +94,13 @@ import { MatchBackend, Cao } from '../../core/models/cao.model';
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- LIGHTBOX -->
+    <div class="lightbox" *ngIf="lightboxUrl" (click)="closeLightbox()">
+      <button class="lightbox-close" (click)="closeLightbox()">&#x2715;</button>
+      <img [src]="lightboxUrl" alt="Imagem completa" (click)="$event.stopPropagation()"
+           onerror="this.onerror=null;this.src='assets/images/dog-placeholder.jpg'">
     </div>
   `,
   styles: [`
@@ -133,9 +148,37 @@ import { MatchBackend, Cao } from '../../core/models/cao.model';
     .match-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
     .match-item.high-score { border-color: #27ae60; background: #f0fff4; }
 
-    .match-snapshot {
-      width: 90px; height: 90px; border-radius: 10px; object-fit: cover; flex-shrink: 0;
+    .snapshot-wrap { position: relative; flex-shrink: 0; width: 90px; height: 90px; }
+    .match-snapshot { width: 90px; height: 90px; border-radius: 10px; object-fit: cover; display: block; }
+    .snapshot-zoom {
+      position: absolute; bottom: 4px; right: 4px;
+      width: 26px; height: 26px; border-radius: 6px;
+      background: rgba(0,0,0,0.6); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: white; transition: background 0.2s;
     }
+    .snapshot-zoom:hover { background: var(--primary-blue); }
+
+    .lightbox {
+      position: fixed; inset: 0; z-index: 3000;
+      background: rgba(0,0,0,0.88); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      cursor: zoom-out; animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+    .lightbox img {
+      max-width: 92vw; max-height: 88vh;
+      border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      cursor: default;
+    }
+    .lightbox-close {
+      position: absolute; top: 1.2rem; right: 1.5rem;
+      background: rgba(255,255,255,0.15); border: none; color: white;
+      font-size: 1.4rem; width: 36px; height: 36px; border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .lightbox-close:hover { background: rgba(255,255,255,0.3); }
     .match-details { flex: 1; min-width: 0; }
     .match-top { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 
@@ -177,6 +220,7 @@ export class CaesEncontradosComponent implements OnInit {
   matchGroups: { cao: Cao; matches: MatchBackend[] }[] = [];
   loading = true;
   errorMessage = '';
+  lightboxUrl: string | null = null;
 
   constructor(
     private caoService: CaoService,
@@ -216,7 +260,7 @@ export class CaesEncontradosComponent implements OnInit {
         caesPerdidos.forEach(cao => {
           this.caoService.getMatches(cao.id).subscribe({
             next: (matches) => {
-              const filtered = matches.filter(m => m.scoreSimilaridade >= 0.75);
+              const filtered = dedupMatches(matches).filter(m => m.scoreSimilaridade >= 0.75);
               if (filtered.length > 0) {
                 groups.push({ cao, matches: filtered.sort((a, b) => b.scoreSimilaridade - a.scoreSimilaridade) });
                 this.allMatches.push(...filtered);
@@ -260,6 +304,14 @@ export class CaesEncontradosComponent implements OnInit {
         alert('Erro ao atualizar status: ' + err.message);
       }
     });
+  }
+
+  openLightbox(url: string | null): void {
+    if (url) this.lightboxUrl = url;
+  }
+
+  closeLightbox(): void {
+    this.lightboxUrl = null;
   }
 
   statusLabel(status: string): string {

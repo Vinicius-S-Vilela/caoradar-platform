@@ -5,7 +5,7 @@ import { NavbarComponent } from '../../shared/components/navbar.component';
 import { MapComponent, MapMarker } from '../../shared/components/map.component';
 import { CaoService } from '../../core/services/cao.service';
 import { AuthService } from '../../core/services/auth.service';
-import { Cao, MatchBackend } from '../../core/models/cao.model';
+import { Cao, MatchBackend, dedupMatches } from '../../core/models/cao.model';
 
 interface Notificacao {
   tipo: 'match' | 'info';
@@ -91,6 +91,7 @@ interface Notificacao {
                 [centerLng]="mapCenterLng"
                 [showRadius]="true"
                 [radiusMeters]="2000"
+                (markerDismissed)="onMarkerDismissed($event)"
                 height="400px"
               ></app-map>
               <div class="empty-inline" *ngIf="mapMarkers.length === 0">
@@ -222,7 +223,7 @@ export class MenuComponent implements OnInit {
         caesPerdidos.forEach(cao => {
           this.caoService.getMatches(cao.id).subscribe({
             next: (matches) => {
-              const goodMatches = matches.filter(m => m.scoreSimilaridade >= 0.75);
+              const goodMatches = dedupMatches(matches).filter(m => m.scoreSimilaridade >= 0.75);
               this.allMatches.push(...goodMatches);
               goodMatches.forEach(m => {
                 this.notificacoes.push({
@@ -233,14 +234,17 @@ export class MenuComponent implements OnInit {
                   score: m.scoreSimilaridade
                 });
 
-                // Marca avistamento no mapa
+                // Marca avistamento no mapa com linha tracejada até o cão perdido
                 if (m.avistamento.cameraOrigem?.latitude && m.avistamento.cameraOrigem?.longitude) {
+                  const latCao = cao.localizacaoPerdido.latitude;
+                  const lngCao = cao.localizacaoPerdido.longitude;
                   this.mapMarkers = [...this.mapMarkers, {
                     lat: m.avistamento.cameraOrigem.latitude,
                     lng: m.avistamento.cameraOrigem.longitude,
-                    label: `Avistamento: ${m.avistamento.features?.racaEstimada || '?'}`,
+                    label: `${cao.nome} — ${(m.scoreSimilaridade * 100).toFixed(0)}% similar`,
+                    type: 'avistamento',
                     imageUrl: m.avistamento.snapshotUrl,
-                    type: 'avistamento'
+                    conectarCom: latCao && lngCao ? { lat: latCao, lng: lngCao } : undefined
                   }];
                 }
               });
@@ -281,22 +285,42 @@ export class MenuComponent implements OnInit {
   }
 
   private buildMapMarkers(): void {
+    const dismissed = this.getDismissedIds();
     this.meusCaes.forEach(cao => {
+      if (dismissed.has(cao.id)) return;
       const lat = cao.localizacaoPerdido.latitude;
       const lng = cao.localizacaoPerdido.longitude;
       if (lat && lng) {
+        const encontrado = cao.status === 'Encontrado';
         this.mapMarkers.push({
+          id: cao.id,
           lat, lng,
-          label: `${cao.nome} - Perdido`,
+          label: `${cao.nome} - ${cao.status}`,
           imageUrl: cao.foto,
-          type: 'perdido'
+          type: encontrado ? 'encontrado' : 'perdido',
+          dismissible: encontrado
         });
-        // Center on first dog
         if (this.mapMarkers.length === 1) {
           this.mapCenterLat = lat;
           this.mapCenterLng = lng;
         }
       }
     });
+  }
+
+  onMarkerDismissed(id: string): void {
+    const ids = this.getDismissedIds();
+    ids.add(id);
+    localStorage.setItem('caoradar:dismissedMapIds', JSON.stringify([...ids]));
+    this.mapMarkers = this.mapMarkers.filter(m => m.id !== id);
+  }
+
+  private getDismissedIds(): Set<string> {
+    try {
+      const raw = localStorage.getItem('caoradar:dismissedMapIds');
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<string>();
+    }
   }
 }
