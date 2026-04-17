@@ -217,6 +217,56 @@ L.Marker.prototype.options.icon = DefaultIcon;
                   </svg>
                   Usar minha localizacao
                 </button>
+              <label class="form-label">Descricao</label>
+              <textarea class="form-control" formControlName="descricao" rows="3"
+                placeholder="Caracteristicas, comportamento, etc."></textarea>
+            </div>
+
+            <!-- Upload de fotos -->
+            <div class="form-group">
+              <label class="form-label">Fotos do cao *</label>
+
+              <div class="upload-area" (click)="fileInput.click()"
+                   [class.has-files]="selectedFiles.length > 0">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <p>Clique para selecionar imagens</p>
+                <small>JPG, PNG ou WEBP</small>
+              </div>
+
+              <input #fileInput type="file" accept="image/*" multiple hidden
+                     (change)="onFilesSelected($event)">
+
+              <div class="previews" *ngIf="previewUrls.length > 0">
+                <div class="preview-item" *ngFor="let url of previewUrls; let i = index">
+                  <img [src]="url" alt="Preview">
+                  <button type="button" class="remove-btn" (click)="removeFile(i)">&times;</button>
+                </div>
+              </div>
+
+              <small *ngIf="selectedFiles.length === 0" style="color: var(--error-red);">
+                Selecione ao menos uma foto
+              </small>
+            </div>
+
+            <!-- LOCALIZAÇÃO -->
+            <h3 style="margin: 2rem 0 1rem; font-size: 1.25rem;">Localizacao onde foi perdido</h3>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Bairro</label>
+                <input type="text" class="form-control" formControlName="bairro" placeholder="Bairro">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cidade *</label>
+                <input type="text" class="form-control" formControlName="cidade" placeholder="Cidade">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Estado *</label>
+                <input type="text" class="form-control" formControlName="estado" placeholder="UF" maxlength="2">
               </div>
               <div #mapContainer class="map-picker"></div>
               <p class="map-status" *ngIf="!selectedLat">
