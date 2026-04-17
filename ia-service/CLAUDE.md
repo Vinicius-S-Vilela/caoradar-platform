@@ -1,52 +1,96 @@
-# CLAUDE.md
+# CLAUDE.md — IA Service
 
-Este arquivo fornece orientações ao Claude Code (claude.ai/code) ao trabalhar com o código neste repositório.
+Microsserviço FastAPI da plataforma **CaoRadar** (localizador de cães perdidos).
 
-## Executando o Serviço
+## Executando localmente
 
 ```bash
 pip install -r requirements.txt
 python app.py
+# Swagger em http://localhost:8000/docs
 ```
-
-O servidor inicia em `http://0.0.0.0:8000`. A documentação Swagger está disponível em `http://localhost:8000/docs`.
 
 ## Arquitetura
 
-Este é um microsserviço FastAPI para detecção e correspondência de cães, parte da plataforma **CaoRadar** (localizador de cães perdidos). Possui três camadas:
-
-- **`app.py`** — Aplicação FastAPI com 3 endpoints REST (processamento de vídeo, relatos de cães perdidos, registro de avistamentos)
-- **`core/agents.py`** — Quatro agentes Gemini via framework `agno`: filtro, comparador, classificador e matcher
-- **`services/`** — Lógica de negócio: `monitoramento.py` (processamento de vídeo com YOLO), `ia_match.py` (matching multimodal), `matching_service.py` (consulta CSV + orquestração de match), `relatos_service.py` (persistência de relatos)
-- **`config/settings.py`** — Caminhos de arquivos, configuração das APIs Cloudinary/Google e parâmetros de ajuste do YOLO
-
-## Fluxo Principal de Dados
-
-**Processamento de Vídeo** (`POST /api/video/process`): Executa em uma thread em segundo plano. Baixa o vídeo → OpenCV lê os frames → YOLOv8 detecta cães (classe 16, confiança > 0,45, 5 fps) → Agentes Gemini filtram/comparam frames para selecionar o melhor frame por cão → Gemini classifica raça/cor/porte → envia para o Cloudinary → salva em `avistamentos_detectados.csv`.
-
-**Matching**: Tanto `/api/relato/criar` quanto `/api/avistamento/criar` consultam o CSV oposto por raça, depois enviam as imagens ao `agente_match` (gemini-2.5-pro) para comparação forense multimodal. Retorna pontuações de probabilidade de 0–100% com justificativa.
-
-**Armazenamento**: Atualmente baseado em CSV (dois arquivos: `avistamentos_detectados.csv` e `relatos_perdidos.csv`). A integração com banco de dados é uma migração planejada.
-
-## Variáveis de Ambiente
-
-Requer um arquivo `.env` com:
 ```
+ia-service/
+├── app.py                        # FastAPI: endpoints e DTOs
+├── config/
+│   └── settings.py               # Variáveis de ambiente e parâmetros YOLO
+├── core/
+│   ├── agents.py                 # 4 agentes Gemini (agno framework)
+│   └── utils.py                  # extrair_json_robusto()
+└── services/
+    ├── monitoramento.py          # Pipeline de vídeo: YOLO → Gemini → Cloudinary → backend
+    └── ia_match.py               # Matching multimodal: busca no backend → Gemini → salva matches
+```
+
+## Endpoints
+
+| Método | Rota                  | Descrição                                              |
+|--------|-----------------------|--------------------------------------------------------|
+| GET    | `/`                   | Health check                                           |
+| POST   | `/api/video/process`  | Processa vídeo, detecta cães, salva avistamentos, match |
+| POST   | `/api/match/relato`   | Matching quando backend cria novo relato perdido        |
+
+## Fluxo de Processamento de Vídeo
+
+```
+Frontend → Backend /api/video/processar → IA /api/video/process
+    ↓
+  YOLOv8 detecta cães
+    ↓
+  Gemini (filtro + comparador) → melhor frame por cão
+    ↓
+  Gemini classificador → raça, cor, porte, detalhes
+    ↓
+  Cloudinary → URL do recorte
+    ↓
+  Backend POST /api/integracao/avistamentos → salva no PostgreSQL
+    ↓
+  Matching automático → busca relatos perdidos de mesma raça
+    ↓
+  Backend POST /matches → salva matches encontrados
+```
+
+## Fluxo de Matching ao Criar Relato
+
+```
+Frontend → Backend POST /relatos → Backend chama IA POST /api/match/relato
+    ↓
+  IA busca avistamentos no backend: GET /avistamentos?raca=X
+    ↓
+  Gemini agente_match → scoring forense 0–100%
+    ↓
+  Backend POST /matches → salva matches (score >= 40)
+```
+
+## Variáveis de Ambiente (.env)
+
+```env
 GOOGLE_API_KEY=...
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
+BACKEND_API_URL=https://api-caoradar.onrender.com
+FRONTEND_URL=https://caoradar.vercel.app
+CORS_ORIGINS=https://caoradar.vercel.app,http://localhost:4200
 ```
 
-## Configurações Principais (`config/settings.py`)
+## Agentes Gemini (core/agents.py)
 
-```python
-YOLO_POR_SEGUNDO = 5          # Taxa de inferência do YOLO
-TEMPO_IA_SEGUNDOS = 0.5       # Intervalo do filtro Gemini por cão rastreado
-TEMPO_SUMICO_SEGUNDOS = 2     # Segundos até um rastreamento ser considerado encerrado
-```
+| Agente             | Modelo              | Função                                              |
+|--------------------|---------------------|-----------------------------------------------------|
+| agente_filtro      | gemini-2.5-flash    | Valida se o frame é nítido e mostra características |
+| agente_comparador  | gemini-2.5-flash    | Escolhe o melhor entre dois frames do mesmo cão     |
+| agente_classificador | gemini-2.5-pro    | Extrai raça, cor, porte, detalhes únicos            |
+| agente_match       | gemini-2.5-pro      | Scoring forense multimodal (0–100%)                 |
 
-## Modelos Gemini Utilizados
+## Endpoints esperados no Backend
 
-- `agente_filtro`, `agente_comparador` → `gemini-2.5-flash`
-- `agente_classificador`, `agente_match` → `gemini-2.5-pro`
+O IA Service consome estes endpoints do backend:
+
+- `GET  /avistamentos?raca=X`            — busca avistamentos para matching
+- `GET  /relatos?status=EM_BUSCA&raca=X` — busca relatos para matching
+- `POST /api/integracao/avistamentos`    — salva avistamento detectado
+- `POST /matches`                        — salva resultado de match

@@ -31,19 +31,28 @@ import { User } from '../../core/models/user.model';
             Cães Perdidos
           </a>
           
-          <a 
-            routerLink="/caes-encontrados" 
-            routerLinkActive="active"
-            class="navbar-link"
-            (click)="closeMenu()"
-          >
-            Cães Encontrados
-          </a>
-
           <!-- Links para usuário autenticado -->
           <ng-container *ngIf="currentUser">
-            <a 
-              routerLink="/dashboard" 
+            <a
+              routerLink="/menu"
+              routerLinkActive="active"
+              class="navbar-link"
+              (click)="closeMenu()"
+            >
+              Menu
+            </a>
+
+            <a
+              routerLink="/matches"
+              routerLinkActive="active"
+              class="navbar-link"
+              (click)="closeMenu()"
+            >
+              Matches
+            </a>
+
+            <a
+              routerLink="/dashboard"
               routerLinkActive="active"
               class="navbar-link"
               (click)="closeMenu()"
@@ -189,11 +198,6 @@ import { User } from '../../core/models/user.model';
       transform: scale(1.1);
     }
 
-    // .logo-img {
-    //   height: 40px;
-    //   width: auto;
-    // }
-
     .logo-text {
       background: linear-gradient(135deg, var(--primary-blue), var(--primary-blue-dark));
       -webkit-background-clip: text;
@@ -303,6 +307,10 @@ import { User } from '../../core/models/user.model';
     .user-name {
       font-weight: 600;
       font-size: 0.9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
     }
 
     .icon-dropdown {

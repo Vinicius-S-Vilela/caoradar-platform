@@ -17,8 +17,10 @@ import { AuthService } from '../../core/services/auth.service';
         <!-- Lado esquerdo - Imagem/Branding -->
         <div class="login-side">
           <div class="login-side-content">
-            <img src="assets/images/Logo.png" alt="Cão Radar" class="login-logo">
-            <h1 class="login-side-title">Bem-vindo ao<br><span>Cão Radar</span></h1>
+            <div class="logo-wrapper">
+              <p class="welcome-text">Bem-vindo ao</p>
+              <img src="assets/images/Logo.png" alt="Cão Radar" class="login-logo">
+            </div>
             <p class="login-side-text">
               Sistema inteligente de localização de cães perdidos utilizando tecnologia de visão computacional.
             </p>
@@ -174,11 +176,10 @@ import { AuthService } from '../../core/services/auth.service';
       background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
       color: var(--white);
       padding: 3rem;
-      padding-top: 0.5rem;
-      // padding: 2rem 3rem 3rem 3rem;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
+      align-items: center;
+      justify-content: center;
       position: relative;
       overflow: hidden;
     }
@@ -199,81 +200,94 @@ import { AuthService } from '../../core/services/auth.service';
       50% { transform: scale(1.1) translate(-10%, -10%); }
     }
 
-    // .login-side-content {
-    //   position: relative;
-    //   z-index: 1;
-    // }
+    .login-side-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 100%;
+      max-width: 380px;
+    }
 
-    // .login-logo {
-    //   width: 80px;
-    //   height: auto;
-    //   margin-bottom: 2rem;
-    //   filter: brightness(0) invert(1);
-    // }
+    .logo-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      padding: 1rem 1.5rem 0;
+      margin-bottom: 2rem;
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
     .login-logo {
-      gap: 0.5rem;
-      padding: 1.1rem 0rem 0.001rem;
-      width: 75px;
+      width: 280px;
       height: auto;
-      transition: transform 0.3s ease;
+      display: block;
+      margin: -3.5rem 0;
     }
 
-    .login-logo:hover {
-      transform: scale(1.1);
-    }
-
-    .login-side-title {
+    .welcome-text {
       font-family: var(--font-display);
-      font-size: 2.5rem;
-      font-weight: 800;
-      line-height: 1.2;
-      margin-bottom: 1rem;
-    }
-
-    .login-side-title span {
-      background: linear-gradient(135deg, #FFF 0%, rgba(255,255,255,0.8) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #444;
+      margin: 0;
+      letter-spacing: 0.5px;
     }
 
     .login-side-text {
-      font-size: 1.05rem;
+      font-size: 1rem;
       line-height: 1.6;
       opacity: 0.9;
-      margin-bottom: 2.5rem;
+      margin-bottom: 2rem;
     }
 
     .login-side-features {
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
+      gap: 1.25rem;
+      width: 100%;
+      text-align: left;
     }
 
     .feature {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      transition: background 0.2s ease;
+    }
+
+    .feature:hover {
+      background: rgba(255, 255, 255, 0.18);
     }
 
     .feature-icon {
-      font-size: 2rem;
+      font-size: 1.5rem;
       flex-shrink: 0;
     }
 
     .feature-text {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.15rem;
     }
 
     .feature-text strong {
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
     }
 
     .feature-text span {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       opacity: 0.85;
     }
 
@@ -408,8 +422,8 @@ import { AuthService } from '../../core/services/auth.service';
         padding: 2rem;
       }
 
-      .login-side-title {
-        font-size: 2rem;
+      .login-logo {
+        width: 220px;
       }
 
       .login-form-side {
@@ -426,8 +440,15 @@ import { AuthService } from '../../core/services/auth.service';
         padding: 1.5rem;
       }
 
-      .login-side-title {
-        font-size: 1.75rem;
+      .logo-wrapper {
+        padding: 0.75rem 0;
+        width: calc(100% + 3rem);
+        margin-left: -1.5rem;
+        margin-right: -1.5rem;
+      }
+
+      .login-logo {
+        width: 180px;
       }
 
       .login-form-side {

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { CameraCardComponent } from '../../shared/components/camera-card.component';
 import { CameraService } from '../../core/services/camera.service';
 import { Camera } from '../../core/models/camera.model';
+import { NotificationService } from '../../core/services/notification.service';
 
 /**
  * Componente de gerenciamento de câmeras do painel admin
@@ -68,8 +69,8 @@ import { Camera } from '../../core/models/camera.model';
         <app-camera-card
           *ngFor="let camera of cameras; let i = index"
           [camera]="camera"
-          [uploadCount]="uploadStats[camera.id]?.count || 0"
-          [lastUploadDate]="uploadStats[camera.id]?.lastDate || null"
+          [uploadCount]="uploadStats[camera.id].count || 0"
+          [lastUploadDate]="uploadStats[camera.id].lastDate || null"
           (videoUploaded)="onVideoUpload($event, i)"
         ></app-camera-card>
       </div>
@@ -278,11 +279,16 @@ export class AdminCamerasComponent implements OnInit {
   totalSuccess: number = 0;
   totalErrors: number = 0;
 
-  constructor(private cameraService: CameraService) {}
+  constructor(
+    private cameraService: CameraService,
+    private notificationService: NotificationService
+  ) {}
 
   ngOnInit(): void {
-    this.cameras = this.cameraService.getCameras();
-    this.initializeStats();
+    this.cameraService.loadCameras().subscribe(cameras => {
+      this.cameras = cameras;
+      this.initializeStats();
+    });
   }
 
   /**
@@ -360,21 +366,11 @@ export class AdminCamerasComponent implements OnInit {
     return Math.round((this.totalSuccess / total) * 100);
   }
 
-  /**
-   * Mostra mensagem de sucesso
-   */
   private showSuccessMessage(message: string): void {
-    // Implementação simples com alert
-    // Você pode substituir por um toast/notification component
-    alert('✅ ' + message);
+    this.notificationService.show('success', 'Upload concluido', message, 8000);
   }
 
-  /**
-   * Mostra mensagem de erro
-   */
   private showErrorMessage(message: string): void {
-    // Implementação simples com alert
-    // Você pode substituir por um toast/notification component
-    alert('❌ ' + message);
+    this.notificationService.show('error', 'Erro no upload', message, 8000);
   }
 }

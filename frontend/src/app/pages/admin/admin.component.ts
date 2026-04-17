@@ -81,7 +81,11 @@ import { Cao } from '../../core/models/cao.model';
           <div *ngIf="activeTab === 'users'">
             <div class="section">
               <h2>Usuários Cadastrados</h2>
-              <div class="table-responsive">
+              <div class="empty-notice" *ngIf="users.length === 0">
+                <p>Listagem de usuários não disponível no momento.</p>
+                <small>O backend ainda não possui endpoint para listar todos os usuários.</small>
+              </div>
+              <div class="table-responsive" *ngIf="users.length > 0">
                 <table class="data-table">
                   <thead>
                     <tr>
@@ -307,6 +311,22 @@ import { Cao } from '../../core/models/cao.model';
       font-size: 0.85rem;
     }
 
+    .empty-notice {
+      text-align: center;
+      padding: 3rem 2rem;
+      background: white;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      color: var(--gray-text);
+    }
+
+    .empty-notice small {
+      display: block;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      opacity: 0.7;
+    }
+
     @media (max-width: 768px) {
       .stats-grid {
         grid-template-columns: 1fr 1fr;
@@ -338,24 +358,43 @@ export class AdminComponent implements OnInit {
   }
 
   loadData(): void {
-    this.authService.getAllUsers().subscribe(users => this.users = users);
-    this.caoService.getAllCaes().subscribe(caes => this.caes = caes);
-    this.caoService.getEstatisticas().subscribe(stats => this.stats = stats);
+    this.authService.getAllUsers().subscribe({
+      next: users => this.users = users,
+      error: () => this.users = []
+    });
+    this.caoService.getAllCaes().subscribe({
+      next: caes => this.caes = caes,
+      error: () => this.caes = []
+    });
+    this.caoService.getEstatisticas().subscribe({
+      next: stats => this.stats = stats,
+      error: () => {}
+    });
   }
 
   deleteUser(id: string): void {
     if (confirm('Excluir este usuário?')) {
-      this.authService.deleteUser(id).subscribe(() => {
-        this.users = this.users.filter(u => u.id !== id);
+      this.authService.deleteUser(id).subscribe({
+        next: () => {
+          this.users = this.users.filter(u => u.id !== id);
+        },
+        error: (err) => {
+          alert(err.message || 'Erro ao excluir usuário');
+        }
       });
     }
   }
 
   deleteCao(id: string): void {
     if (confirm('Excluir este cadastro?')) {
-      this.caoService.deleteCao(id).subscribe(() => {
-        this.caes = this.caes.filter(c => c.id !== id);
-        this.loadData();
+      this.caoService.deleteCao(id).subscribe({
+        next: () => {
+          this.caes = this.caes.filter(c => c.id !== id);
+          this.loadData();
+        },
+        error: (err) => {
+          alert(err.message || 'Erro ao excluir cadastro');
+        }
       });
     }
   }
