@@ -1,16 +1,16 @@
 package com.caoradar.backend.service;
 
-import com.caoradar.backend.model.AvistamentoIA;
-import com.caoradar.backend.model.RelatoPerda;
-import com.caoradar.backend.model.StatusRelato;
-import com.caoradar.backend.model.User;
+import com.caoradar.backend.model.*;
+import com.caoradar.backend.repository.AvistamentoIARepository;
+import com.caoradar.backend.repository.MatchRepository;
 import com.caoradar.backend.repository.RelatoPerdaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class RelatoService {
@@ -19,23 +19,21 @@ public class RelatoService {
     private RelatoPerdaRepository relatoRepository;
 
     @Autowired
-    private AvistamentoService avistamentoService;
+    private AvistamentoIARepository avistamentoRepository;
+
+    @Autowired
+    private MatchRepository matchRepository;
 
     @Autowired
     private RestTemplate restTemplate;
 
-    // URL provisória onde o Python estará
-    private final String PYTHON_API_URL = "http://localhost:8000/api/comparar-relato";
+    // URL do microsserviço Python (IA Service)
+    // Dentro do Docker, usa host.docker.internal para alcançar a máquina host
+    @org.springframework.beans.factory.annotation.Value("${IA_SERVICE_URL:http://host.docker.internal:8000}")
+    private String iaServiceBaseUrl;
 
-    // DTO interno para enviar ao Python
-    public static class PayloadParaPython {
-        public RelatoPerda relato;
-        public List<AvistamentoIA> candidatos;
-
-        public PayloadParaPython(RelatoPerda relato, List<AvistamentoIA> candidatos) {
-            this.relato = relato;
-            this.candidatos = candidatos;
-        }
+    private String getPythonApiUrl() {
+        return iaServiceBaseUrl + "/api/match/relato";
     }
 
     public RelatoPerda criarRelato(RelatoPerda relato) {
@@ -44,31 +42,85 @@ public class RelatoService {
         if (relato.getDataDesaparecimento() == null) {
             relato.setDataDesaparecimento(LocalDateTime.now());
         }
-        
+
         // 2. Salva no banco de dados
         RelatoPerda salvo = relatoRepository.save(relato);
 
-        // 3. O GATILHO ATIVO (Try-Catch para evitar que o Java falhe se o Python estiver offline)
+        // 3. Chama a IA para fazer matching com avistamentos existentes
         try {
-            // Busca os avistamentos antigos que batem com a Cor e a Raça do cão recém-perdido
-            List<AvistamentoIA> candidatos = avistamentoService.buscarComFiltros(
-                    null, salvo.getCorPredominante(), salvo.getRaca()
-            );
+            // Monta payload compatível com MatchRelatoRequest do FastAPI
+            List<String> fotos = salvo.getFotosUrl();
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("relato_id", salvo.getId().toString());
+            payload.put("nome_cao", salvo.getNomeCao());
+            payload.put("foto_url", (fotos != null && !fotos.isEmpty()) ? fotos.get(0) : "");
+            payload.put("raca", salvo.getRaca());
+            payload.put("porte", salvo.getPorteInformado());
+            payload.put("cor", salvo.getCorPredominante());
+            payload.put("descricao", salvo.getDescricao() != null ? salvo.getDescricao() : "");
+            payload.put("latitude", salvo.getLatitude() != null ? salvo.getLatitude() : 0.0);
+            payload.put("longitude", salvo.getLongitude() != null ? salvo.getLongitude() : 0.0);
 
-            // Chamar o Python se houver pelo menos 1 candidato
-            if (!candidatos.isEmpty()) {
-                PayloadParaPython payload = new PayloadParaPython(salvo, candidatos);
-                
-                // Dispara o POST para o Python
-                System.out.println("Disparando aviso para o Python com " + candidatos.size() + " candidato(s)!");
-                restTemplate.postForEntity(PYTHON_API_URL, payload, String.class);
+            String url = getPythonApiUrl();
+            System.out.println("📡 Enviando relato para IA Service (" + url + "): " + salvo.getNomeCao());
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, payload, Map.class);
+
+            // Processa matches retornados pela IA
+            if (response.getBody() != null) {
+                List<Map<String, Object>> matches = (List<Map<String, Object>>) response.getBody().get("matches");
+                if (matches != null && !matches.isEmpty()) {
+                    int salvosCount = 0;
+                    for (Map<String, Object> matchData : matches) {
+                        try {
+                            String idCandidato = String.valueOf(matchData.get("id_candidato"));
+                            Number probNum = (Number) matchData.get("probabilidade_match");
+                            double probabilidade = probNum != null ? probNum.doubleValue() / 100.0 : 0.0;
+                            String justificativa = String.valueOf(matchData.getOrDefault("justificativa_visual_e_texto", ""));
+
+                            // Busca o avistamento no banco pelo ID
+                            Optional<AvistamentoIA> avistamentoOpt = avistamentoRepository.findById(UUID.fromString(idCandidato));
+                            if (avistamentoOpt.isPresent()) {
+                                Match match = new Match();
+                                match.setRelato(salvo);
+                                match.setAvistamento(avistamentoOpt.get());
+                                match.setScoreSimilaridade(probabilidade);
+                                match.setExplicacaoLLM(justificativa);
+                                match.setStatus(StatusMatch.PENDENTE_ANALISE);
+                                matchRepository.save(match);
+                                salvosCount++;
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Erro ao salvar match individual: " + e.getMessage());
+                        }
+                    }
+                    System.out.println("✅ " + salvosCount + " match(es) salvos no banco via IA.");
+                }
             }
 
         } catch (Exception e) {
-            System.err.println("Erro ao contactar o microsserviço Python: " + e.getMessage());
+            System.err.println("⚠️ IA Service indisponível (relato salvo normalmente): " + e.getMessage());
         }
 
         return salvo;
+    }
+
+    public RelatoPerda atualizarStatus(java.util.UUID id, StatusRelato novoStatus) {
+        RelatoPerda relato = relatoRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Relato não encontrado: " + id));
+        relato.setStatus(novoStatus);
+        return relatoRepository.save(relato);
+    }
+
+    public boolean existsById(java.util.UUID id) {
+        return relatoRepository.existsById(id);
+    }
+
+    public void deletarPorId(java.util.UUID id) {
+        RelatoPerda relato = relatoRepository.findById(id).orElseThrow();
+        // Remove matches vinculados antes (FK constraint)
+        List<Match> matches = matchRepository.findByRelatoOrderByScoreSimilaridadeDesc(relato);
+        matchRepository.deleteAll(matches);
+        relatoRepository.delete(relato);
     }
 
     public List<RelatoPerda> listarPorTutor(User tutor) {
