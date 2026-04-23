@@ -126,17 +126,6 @@ import { AuthService } from '../../core/services/auth.service';
               </button>
             </form>
 
-            <!-- Credenciais de teste -->
-            <div class="test-credentials">
-              <p class="test-credentials-title">🔑 Credenciais de teste:</p>
-              <div class="test-credential-item">
-                <strong>Usuário:</strong> usuario&#64;teste.com | <strong>Senha:</strong> senha123
-              </div>
-              <div class="test-credential-item">
-                <strong>Admin:</strong> admin&#64;cao-radar.com | <strong>Senha:</strong> admin123
-              </div>
-            </div>
-
             <!-- Link para cadastro -->
             <div class="form-footer">
               <p>
@@ -362,32 +351,6 @@ import { AuthService } from '../../core/services/auth.service';
     .btn-block {
       width: 100%;
       margin-top: 1.5rem;
-    }
-
-    .test-credentials {
-      margin-top: 2rem;
-      padding: 1rem;
-      background-color: var(--secondary-blue);
-      border-radius: var(--radius-md);
-      border-left: 4px solid var(--primary-blue);
-    }
-
-    .test-credentials-title {
-      font-weight: 600;
-      color: var(--gray-dark);
-      margin-bottom: 0.75rem;
-      font-size: 0.9rem;
-    }
-
-    .test-credential-item {
-      font-size: 0.85rem;
-      color: var(--gray-text);
-      margin-bottom: 0.25rem;
-      font-family: 'Courier New', monospace;
-    }
-
-    .test-credential-item:last-child {
-      margin-bottom: 0;
     }
 
     .form-footer {

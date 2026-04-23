@@ -19,8 +19,11 @@ from pydantic import BaseModel
 from typing import Optional
 
 from config.settings import setup_apis, CORS_ORIGINS
+from core.log_buffer import log_buffer, install_stdout_capture
 from services.monitoramento import processar_video_best_shot
 from services.ia_match import fazer_match_relato_perdido
+
+install_stdout_capture()
 
 # ==========================================
 # APP
@@ -144,6 +147,21 @@ def processar_video(request: ProcessarVideoRequest):
     except Exception as e:
         print(f"❌ Erro: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/logs", tags=["Admin"])
+def get_logs(since: int = 0, limit: int = 500):
+    """Retorna logs recentes do serviço (stdout/stderr capturados).
+    Usado pelo painel administrativo do frontend — restrito a usuários ADMIN na UI.
+
+    Params:
+      since: retorna apenas logs com id > since (long polling / paginação)
+      limit: limite de entradas (default 500, também é o tamanho do buffer)
+    """
+    return {
+        "logs": log_buffer.get(since_id=since, limit=limit),
+        "stats": log_buffer.stats(),
+    }
 
 
 @app.post("/api/match/relato", response_model=MatchRelatoResponse, tags=["Matching"])

@@ -25,15 +25,17 @@ public class WebhookIAController {
     }
 
     @PostMapping("/avistamentos")
-    public ResponseEntity<java.util.Map<String, Object>> receberAvistamento(@RequestBody InputPythonDTO input) {
+    public ResponseEntity<String> receberAvistamento(@RequestBody InputPythonDTO input) {
         System.out.println("Recebendo avistamento da câmera: " + input.codigoCamera);
 
+        // Converter DTO para Entidade
         AvistamentoIA avistamento = new AvistamentoIA();
         avistamento.setSnapshotUrl(input.snapshotUrl);
         avistamento.setFeatures(input.features);
 
-        java.util.UUID id = processamentoService.processarNovoAvistamento(avistamento, input.codigoCamera);
+        // Chamar o serviço
+        processamentoService.processarNovoAvistamento(avistamento, input.codigoCamera);
 
-        return ResponseEntity.ok(java.util.Map.of("id", id.toString()));
+        return ResponseEntity.ok("Avistamento processado com sucesso!");
     }
 }
