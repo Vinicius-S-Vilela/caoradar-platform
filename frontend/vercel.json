@@ -2,7 +2,7 @@
   "version": 2,
   "public": false,
   "buildCommand": "npm run build:vercel",
-  "outputDirectory": "dist/cao-radar",
+  "outputDirectory": "dist/cao-radar/browser",
   "github": {
     "silent": true
   },
