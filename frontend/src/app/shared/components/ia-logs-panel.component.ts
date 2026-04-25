@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Subscription, interval } from 'rxjs';
 import { switchMap, startWith } from 'rxjs/operators';
 import { AuthService } from '../../core/services/auth.service';
-import { IaLogsService, IaLogEntry, IaLogsStats } from '../../core/services/ia-logs.service';
+import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core/services/ia-logs.service';
 
 @Component({
   selector: 'app-ia-logs-panel',
@@ -31,6 +31,22 @@ import { IaLogsService, IaLogEntry, IaLogsStats } from '../../core/services/ia-l
             <strong>IA Service · Logs</strong>
           </div>
           <div class="ia-logs-actions">
+            <button
+              class="ia-logs-btn"
+              (click)="setSource('run')"
+              [class.active]="source === 'run'"
+              title="Logs do container"
+            >
+              run
+            </button>
+            <button
+              class="ia-logs-btn"
+              (click)="setSource('build')"
+              [class.active]="source === 'build'"
+              title="Logs de build"
+            >
+              build
+            </button>
             <button
               class="ia-logs-btn"
               (click)="autoScroll = !autoScroll"
@@ -314,6 +330,7 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
   stats: IaLogsStats | null = null;
   hasError = false;
   errorMessage = '';
+  source: IaLogsSource = 'run';
   readonly pollMs = 5000;
 
   private lastId = 0;
@@ -335,7 +352,7 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
     this.sub = interval(this.pollMs)
       .pipe(
         startWith(0),
-        switchMap(() => this.iaLogsService.getLogs(this.lastId))
+        switchMap(() => this.iaLogsService.getLogs(this.lastId, 500, this.source))
       )
       .subscribe({
         next: (resp) => {
@@ -375,6 +392,14 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
 
   clearLocal(): void {
     this.logs = [];
+  }
+
+  setSource(source: IaLogsSource): void {
+    if (this.source === source) return;
+    this.source = source;
+    this.logs = [];
+    this.lastId = 0;
+    this.shouldScroll = this.autoScroll;
   }
 
   trackById(_: number, log: IaLogEntry): number {

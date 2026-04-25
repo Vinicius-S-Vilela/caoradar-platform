@@ -20,7 +20,10 @@ export interface IaLogsStats {
 export interface IaLogsResponse {
   logs: IaLogEntry[];
   stats: IaLogsStats;
+  source?: string;
 }
+
+export type IaLogsSource = 'run' | 'build';
 
 @Injectable({ providedIn: 'root' })
 export class IaLogsService {
@@ -28,9 +31,13 @@ export class IaLogsService {
 
   constructor(private http: HttpClient) {}
 
-  getLogs(since: number = 0, limit: number = 500): Observable<IaLogsResponse> {
+  getLogs(
+    since: number = 0,
+    limit: number = 500,
+    source: IaLogsSource = 'run',
+  ): Observable<IaLogsResponse> {
     return this.http.get<IaLogsResponse>(
-      `${this.baseUrl}/api/logs?since=${since}&limit=${limit}`
+      `${this.baseUrl}/api/logs?since=${since}&limit=${limit}&source=${source}`
     );
   }
 }

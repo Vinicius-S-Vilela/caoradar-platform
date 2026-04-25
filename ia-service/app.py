@@ -18,12 +18,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
-from config.settings import setup_apis, CORS_ORIGINS
-from core.log_buffer import log_buffer, install_stdout_capture
+from config.settings import setup_apis, CORS_ORIGINS, HF_TOKEN
+from core.log_buffer import log_buffer, hf_log_buffers, install_stdout_capture
+from core.hf_logs import fetch_hf_logs
 from services.monitoramento import processar_video_best_shot
 from services.ia_match import fazer_match_relato_perdido
 
-install_stdout_capture()
+# Sem HF_TOKEN (dev local), capturamos stdout pra alimentar o buffer.
+# Em produção (Space com HF_TOKEN setado) preferimos a API do HF —
+# ela vê tambem logs de boot/erro fatal que o capture local perderia.
+if not HF_TOKEN:
+    install_stdout_capture()
 
 # ==========================================
 # APP
@@ -150,17 +155,33 @@ def processar_video(request: ProcessarVideoRequest):
 
 
 @app.get("/api/logs", tags=["Admin"])
-def get_logs(since: int = 0, limit: int = 500):
-    """Retorna logs recentes do serviço (stdout/stderr capturados).
-    Usado pelo painel administrativo do frontend — restrito a usuários ADMIN na UI.
+def get_logs(since: int = 0, limit: int = 500, source: str = "run"):
+    """Retorna logs recentes do serviço.
+
+    Em produção (HF_TOKEN setado), os logs vêm da API do Hugging Face Spaces
+    — os mesmos exibidos em /spaces/<space>?logs=container. O `source` aceita
+    "run" (container) ou "build". Em dev local, lê do capture de stdout.
 
     Params:
-      since: retorna apenas logs com id > since (long polling / paginação)
-      limit: limite de entradas (default 500, também é o tamanho do buffer)
+      since:  retorna apenas logs com id > since (cursor)
+      limit:  limite de entradas (default 500)
+      source: "run" | "build" — apenas relevante quando HF_TOKEN existe
     """
+    if HF_TOKEN:
+        src = source if source in ("run", "build") else "run"
+        buf = hf_log_buffers[src]
+        for entry in fetch_hf_logs(source=src):
+            buf.add(entry["message"], timestamp=entry.get("timestamp"))
+        return {
+            "logs": buf.get(since_id=since, limit=limit),
+            "stats": buf.stats(),
+            "source": src,
+        }
+
     return {
         "logs": log_buffer.get(since_id=since, limit=limit),
         "stats": log_buffer.stats(),
+        "source": "stdout",
     }
 
 
