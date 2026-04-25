@@ -54,8 +54,32 @@ public class RelatoController {
             @RequestParam(required = false) String cor,
             @RequestParam(required = false) String porte,
             @RequestParam(required = false) String raca) {
-        
+
         List<RelatoPerda> resultados = relatoService.buscarComFiltros(status, cor, porte, raca);
         return ResponseEntity.ok(resultados);
+    }
+
+    // PUT /relatos/{id}/status   body: { "status": "ENCONTRADO" }
+    public static class StatusUpdateDTO {
+        public StatusRelato status;
+    }
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<?> atualizarStatus(@PathVariable UUID id, @RequestBody StatusUpdateDTO body) {
+        if (body == null || body.status == null) {
+            return ResponseEntity.badRequest().body("Campo 'status' é obrigatório.");
+        }
+        try {
+            return ResponseEntity.ok(relatoService.atualizarStatus(id, body.status));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // DELETE /relatos/{id}
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> excluirRelato(@PathVariable UUID id) {
+        boolean removido = relatoService.excluirRelato(id);
+        return removido ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 }

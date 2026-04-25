@@ -27,7 +27,7 @@ export type IaLogsSource = 'run' | 'build';
 
 @Injectable({ providedIn: 'root' })
 export class IaLogsService {
-  private readonly baseUrl = environment.iaUrl;
+  private readonly baseUrl = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 
@@ -37,7 +37,7 @@ export class IaLogsService {
     source: IaLogsSource = 'run',
   ): Observable<IaLogsResponse> {
     return this.http.get<IaLogsResponse>(
-      `${this.baseUrl}/api/logs?since=${since}&limit=${limit}&source=${source}`
+      `${this.baseUrl}/admin/ia-logs?since=${since}&limit=${limit}&source=${source}`
     );
   }
 }

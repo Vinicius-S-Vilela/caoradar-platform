@@ -30,15 +30,6 @@ YOLO_POR_SEGUNDO     = int(os.getenv("YOLO_POR_SEGUNDO",    "5"))   # frames ana
 TEMPO_IA_SEGUNDOS    = float(os.getenv("TEMPO_IA_SEGUNDOS", "0.5")) # intervalo entre chamadas Gemini por cão
 TEMPO_SUMICO_SEGUNDOS = float(os.getenv("TEMPO_SUMICO_SEGUNDOS", "2"))  # segundos até considerar cão saiu
 
-# ==========================================
-# HUGGING FACE (logs API)
-# ==========================================
-# HF_TOKEN deve ser um token "read" do HF, configurado como Secret no Space.
-# HF_SPACE_ID no formato "<owner>/<space>", ex: "PalmaPedroA/caoradar-iaservice"
-HF_TOKEN    = os.getenv("HF_TOKEN", "").strip()
-HF_SPACE_ID = os.getenv("HF_SPACE_ID", "PalmaPedroA/caoradar-iaservice").strip()
-
-
 def setup_apis():
     """Inicializa Cloudinary e valida variáveis obrigatórias."""
     cloudinary.config(
