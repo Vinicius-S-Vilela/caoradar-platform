@@ -18,10 +18,11 @@ public class HfLogsController {
 
     @GetMapping("/ia-logs")
     public Map<String, Object> getIaLogs(
-            @RequestParam(defaultValue = "0")   long   since,
-            @RequestParam(defaultValue = "500") int    limit,
-            @RequestParam(defaultValue = "run") String source
+            @RequestParam(defaultValue = "0")     long    since,
+            @RequestParam(defaultValue = "500")   int     limit,
+            @RequestParam(defaultValue = "run")   String  source,
+            @RequestParam(defaultValue = "false") boolean force
     ) {
-        return hfLogsService.getLogs(source, since, limit);
+        return hfLogsService.getLogs(source, since, limit, force);
     }
 }

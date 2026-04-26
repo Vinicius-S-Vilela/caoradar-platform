@@ -255,7 +255,7 @@ cd backend
 export DB_URL=jdbc:postgresql://localhost:5432/caoradar_db
 export DB_USER=admin
 export DB_PASS=admin
-export IA_SERVICE_URL=http://localhost:8000
+export IA_API_URL=http://localhost:8000
 export CORS_ORIGINS=http://localhost:4200
 
 # Rodar
@@ -395,7 +395,7 @@ Swagger interativo disponível em `/docs` (dev: `http://localhost:8000/docs`).
 | `DB_URL` | JDBC URL do PostgreSQL | `jdbc:postgresql://localhost:5432/caoradar_db` |
 | `DB_USER` | Usuário do banco | `admin` |
 | `DB_PASS` | Senha do banco | `admin` |
-| `IA_SERVICE_URL` | URL da IA Service | `http://host.docker.internal:8000` |
+| `IA_API_URL` | URL da IA Service | `http://host.docker.internal:8000` |
 | `CORS_ORIGINS` | Origens CORS (separadas por vírgula) | `http://localhost:4200` |
 
 > Para produção (NeonDB): adicionar `?sslmode=require` na `DB_URL`.
@@ -484,7 +484,7 @@ tb_users ──(1:N)──► tb_relatos_perda ──(1:N)──► tb_matches �
 2. Render detecta o `Dockerfile` em `/backend` e inicia rebuild automático
 3. Verificar variáveis de ambiente no painel do Render:
    - `DB_URL` com `?sslmode=require` (NeonDB)
-   - `IA_SERVICE_URL=https://palmapedroa-caoradar-iaservice.hf.space`
+   - `IA_API_URL=https://palmapedroa-caoradar-iaservice.hf.space`
    - `CORS_ORIGINS=https://caoradar.vercel.app`
 
 > ⚠️ Nenhuma migration de banco é necessária — o Hibernate atualiza o schema automaticamente.

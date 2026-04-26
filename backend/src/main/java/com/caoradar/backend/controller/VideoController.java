@@ -16,8 +16,8 @@ public class VideoController {
     @Autowired
     private RestTemplate restTemplate;
 
-    @Value("${IA_SERVICE_URL:http://host.docker.internal:8000}")
-    private String iaServiceUrl;
+    @Value("${IA_API_URL:http://host.docker.internal:8000}")
+    private String iaApiUrl;
 
     public static class ProcessarVideoDTO {
         public String cameraId;
@@ -41,7 +41,7 @@ public class VideoController {
                     "video_url",        dto.videoUrl,
                     "data_hora",        dto.dataHora
                 );
-                String iaUrl = iaServiceUrl + "/api/video/process";
+                String iaUrl = iaApiUrl.replaceAll("/+$", "") + "/api/video/process";
                 System.out.println("📡 [BG] Enviando para IA Service: " + iaUrl);
                 restTemplate.postForEntity(iaUrl, payload, Map.class);
                 System.out.println("✅ [BG] IA Service concluiu para câmera " + dto.cameraId);
