@@ -35,9 +35,9 @@ export class IaLogsService {
     since: number = 0,
     limit: number = 500,
     source: IaLogsSource = 'run',
+    force: boolean = false,
   ): Observable<IaLogsResponse> {
-    return this.http.get<IaLogsResponse>(
-      `${this.baseUrl}/admin/ia-logs?since=${since}&limit=${limit}&source=${source}`
-    );
+    const params = `since=${since}&limit=${limit}&source=${source}` + (force ? '&force=true' : '');
+    return this.http.get<IaLogsResponse>(`${this.baseUrl}/admin/ia-logs?${params}`);
   }
 }

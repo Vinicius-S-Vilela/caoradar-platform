@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subscription, interval } from 'rxjs';
-import { switchMap, startWith } from 'rxjs/operators';
+import { Subscription, Subject, interval, merge } from 'rxjs';
+import { switchMap, startWith, map } from 'rxjs/operators';
 import { AuthService } from '../../core/services/auth.service';
 import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core/services/ia-logs.service';
 
@@ -46,6 +46,15 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
               title="Logs de build"
             >
               build
+            </button>
+            <button
+              class="ia-logs-btn"
+              (click)="refreshNow()"
+              [disabled]="refreshing"
+              title="Buscar logs agora"
+            >
+              <span class="ia-logs-refresh" [class.spinning]="refreshing">↻</span>
+              refresh
             </button>
             <button
               class="ia-logs-btn"
@@ -227,6 +236,17 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
     }
     .ia-logs-btn:hover  { background: #374151; }
     .ia-logs-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .ia-logs-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ia-logs-refresh {
+      display: inline-block;
+      margin-right: 0.2rem;
+      transform-origin: 50% 50%;
+    }
+    .ia-logs-refresh.spinning { animation: ialogs-spin 0.8s linear infinite; }
+    @keyframes ialogs-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
     .ia-logs-close {
       font-size: 1rem;
       line-height: 1;
@@ -326,6 +346,7 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
 
   expanded = false;
   autoScroll = true;
+  refreshing = false;
   logs: IaLogEntry[] = [];
   stats: IaLogsStats | null = null;
   hasError = false;
@@ -336,6 +357,7 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
   private lastId = 0;
   private sub?: Subscription;
   private shouldScroll = false;
+  private readonly refresh$ = new Subject<boolean>();
 
   get isAdmin(): boolean {
     return this.authService.isAdmin();
@@ -349,16 +371,17 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
   ngOnInit(): void {
     if (!this.isAdmin) return;
 
-    this.sub = interval(this.pollMs)
+    const poll$ = interval(this.pollMs).pipe(startWith(0), map(() => false));
+    this.sub = merge(poll$, this.refresh$)
       .pipe(
-        startWith(0),
-        switchMap(() => this.iaLogsService.getLogs(this.lastId, 500, this.source))
+        switchMap((force) => this.iaLogsService.getLogs(this.lastId, 500, this.source, force))
       )
       .subscribe({
         next: (resp) => {
           this.hasError = false;
           this.errorMessage = '';
           this.stats = resp.stats;
+          this.refreshing = false;
 
           if (resp.logs.length > 0) {
             this.logs = [...this.logs, ...resp.logs].slice(-500);
@@ -369,8 +392,15 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
         error: (err) => {
           this.hasError = true;
           this.errorMessage = err?.message || 'Erro desconhecido';
+          this.refreshing = false;
         }
       });
+  }
+
+  refreshNow(): void {
+    if (this.refreshing) return;
+    this.refreshing = true;
+    this.refresh$.next(true);
   }
 
   ngAfterViewChecked(): void {

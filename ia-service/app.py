@@ -13,6 +13,8 @@ Endpoints:
 Documentação interativa: /docs
 """
 
+import sys
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,6 +23,14 @@ from typing import Optional
 from config.settings import setup_apis, CORS_ORIGINS
 from services.monitoramento import processar_video_best_shot
 from services.ia_match import fazer_match_relato_perdido
+
+# Garante que prints aparecem no stream do HF Spaces (sem isso, o buffer
+# do Python pode segurar a saída e os logs nunca chegam ao SSE /logs/run).
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+except Exception:
+    pass
 
 # ==========================================
 # APP

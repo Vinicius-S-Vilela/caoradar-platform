@@ -74,12 +74,17 @@ public class HfLogsService {
     }
 
     public Map<String, Object> getLogs(String source, long sinceId, int limit) {
+        return getLogs(source, sinceId, limit, false);
+    }
+
+    public Map<String, Object> getLogs(String source, long sinceId, int limit, boolean force) {
         String src    = "build".equals(source) ? "build" : "run";
         SourceState st = states.get(src);
 
         synchronized (st.lock) {
             long now = System.currentTimeMillis();
-            if (!hfToken.isEmpty() && now - st.lastFetchMs > CACHE_TTL_MS) {
+            boolean stale = now - st.lastFetchMs > CACHE_TTL_MS;
+            if (!hfToken.isEmpty() && (force || stale)) {
                 st.lastFetchMs = now;
                 try {
                     fetchAndStore(src, st);
