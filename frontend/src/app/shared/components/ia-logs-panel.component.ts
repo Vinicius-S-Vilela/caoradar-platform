@@ -1,9 +1,15 @@
 import { Component, OnDestroy, OnInit, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subscription, Subject, interval, merge } from 'rxjs';
-import { switchMap, startWith, map } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
-import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core/services/ia-logs.service';
+import { IaLogsService, IaLogEntry, IaLogsSource } from '../../core/services/ia-logs.service';
+
+interface LocalStats {
+  total: number;
+  errors: number;
+  videos: number;
+  matches: number;
+}
 
 @Component({
   selector: 'app-ia-logs-panel',
@@ -19,7 +25,7 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
       >
         <span class="ia-logs-toggle-icon">{{ '{' }}/{{ '}' }}</span>
         <span class="ia-logs-toggle-label">IA Logs</span>
-        <span class="ia-logs-toggle-badge" *ngIf="stats && stats.errors > 0">
+        <span class="ia-logs-toggle-badge" *ngIf="stats.errors > 0">
           {{ stats.errors }}
         </span>
       </button>
@@ -27,8 +33,13 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
       <div class="ia-logs-panel" *ngIf="expanded">
         <div class="ia-logs-header">
           <div class="ia-logs-title">
-            <span class="ia-logs-dot" [class.online]="!hasError" [class.offline]="hasError"></span>
+            <span class="ia-logs-dot"
+                  [class.online]="connected"
+                  [class.offline]="!connected"></span>
             <strong>IA Service · Logs</strong>
+            <small class="ia-logs-mode">
+              {{ connected ? 'streaming' : 'reconectando…' }}
+            </small>
           </div>
           <div class="ia-logs-actions">
             <button
@@ -49,15 +60,6 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
             </button>
             <button
               class="ia-logs-btn"
-              (click)="refreshNow()"
-              [disabled]="refreshing"
-              title="Buscar logs agora"
-            >
-              <span class="ia-logs-refresh" [class.spinning]="refreshing">↻</span>
-              refresh
-            </button>
-            <button
-              class="ia-logs-btn"
               (click)="autoScroll = !autoScroll"
               [class.active]="autoScroll"
               title="Rolagem automática"
@@ -73,18 +75,18 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
           </div>
         </div>
 
-        <div class="ia-logs-stats" *ngIf="stats">
+        <div class="ia-logs-stats">
           <div class="stat">
             <span class="stat-label">Total</span>
             <span class="stat-value">{{ stats.total }}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Vídeos</span>
-            <span class="stat-value">{{ stats.videos_processados }}</span>
+            <span class="stat-value">{{ stats.videos }}</span>
           </div>
           <div class="stat">
             <span class="stat-label">Matches</span>
-            <span class="stat-value">{{ stats.matches_iniciados }}</span>
+            <span class="stat-value">{{ stats.matches }}</span>
           </div>
           <div class="stat stat-error" [class.highlight]="stats.errors > 0">
             <span class="stat-label">Erros</span>
@@ -93,13 +95,13 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
         </div>
 
         <div class="ia-logs-body" #body>
-          <div class="ia-logs-empty" *ngIf="logs.length === 0 && !hasError">
-            Aguardando logs do IA Service...
+          <div class="ia-logs-empty" *ngIf="logs.length === 0 && connected">
+            Aguardando logs do IA Service…
           </div>
-          <div class="ia-logs-empty ia-logs-err" *ngIf="hasError">
-            Não foi possível conectar ao endpoint /api/logs.
+          <div class="ia-logs-empty ia-logs-err" *ngIf="!connected && logs.length === 0">
+            Sem conexão com o stream de logs.
             <br />
-            <small>{{ errorMessage }}</small>
+            <small>Verifique HF_TOKEN no backend.</small>
           </div>
           <div
             *ngFor="let log of logs; trackBy: trackById"
@@ -114,7 +116,9 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
         </div>
 
         <div class="ia-logs-footer">
-          <small>Atualiza a cada {{ pollMs / 1000 }}s · últimos {{ logs.length }} registros</small>
+          <small>
+            SSE proxy do HF · {{ logs.length }} linha(s) em buffer
+          </small>
         </div>
       </div>
     </div>
@@ -163,10 +167,10 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
     }
 
     .ia-logs-panel {
-      width: 440px;
+      width: 480px;
       max-width: calc(100vw - 2rem);
       height: 70vh;
-      max-height: 640px;
+      max-height: 680px;
       background: #0b1020;
       color: #e5e7eb;
       border: 1px solid #1f2937;
@@ -190,6 +194,7 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
       padding: 0.6rem 0.85rem;
       background: #111827;
       border-bottom: 1px solid #1f2937;
+      gap: 0.5rem;
     }
     .ia-logs-title {
       display: flex;
@@ -197,6 +202,12 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
       gap: 0.5rem;
       font-size: 0.85rem;
       color: #f9fafb;
+      min-width: 0;
+    }
+    .ia-logs-mode {
+      color: #9ca3af;
+      font-size: 0.7rem;
+      font-weight: 400;
     }
     .ia-logs-dot {
       width: 8px;
@@ -204,6 +215,7 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
       border-radius: 50%;
       background: #6b7280;
       box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.2);
+      flex-shrink: 0;
     }
     .ia-logs-dot.online {
       background: #22c55e;
@@ -222,6 +234,7 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
     .ia-logs-actions {
       display: flex;
       gap: 0.3rem;
+      flex-wrap: wrap;
     }
     .ia-logs-btn {
       background: #1f2937;
@@ -236,17 +249,6 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
     }
     .ia-logs-btn:hover  { background: #374151; }
     .ia-logs-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
-    .ia-logs-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .ia-logs-refresh {
-      display: inline-block;
-      margin-right: 0.2rem;
-      transform-origin: 50% 50%;
-    }
-    .ia-logs-refresh.spinning { animation: ialogs-spin 0.8s linear infinite; }
-    @keyframes ialogs-spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
     .ia-logs-close {
       font-size: 1rem;
       line-height: 1;
@@ -344,20 +346,18 @@ import { IaLogsService, IaLogEntry, IaLogsStats, IaLogsSource } from '../../core
 export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild('body') bodyRef?: ElementRef<HTMLDivElement>;
 
+  private static readonly MAX_BUFFER = 1000;
+
   expanded = false;
   autoScroll = true;
-  refreshing = false;
+  connected = false;
   logs: IaLogEntry[] = [];
-  stats: IaLogsStats | null = null;
-  hasError = false;
-  errorMessage = '';
+  stats: LocalStats = { total: 0, errors: 0, videos: 0, matches: 0 };
   source: IaLogsSource = 'run';
-  readonly pollMs = 5000;
 
-  private lastId = 0;
   private sub?: Subscription;
   private shouldScroll = false;
-  private readonly refresh$ = new Subject<boolean>();
+  private nextLocalId = 1;
 
   get isAdmin(): boolean {
     return this.authService.isAdmin();
@@ -370,37 +370,7 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
 
   ngOnInit(): void {
     if (!this.isAdmin) return;
-
-    const poll$ = interval(this.pollMs).pipe(startWith(0), map(() => false));
-    this.sub = merge(poll$, this.refresh$)
-      .pipe(
-        switchMap((force) => this.iaLogsService.getLogs(this.lastId, 500, this.source, force))
-      )
-      .subscribe({
-        next: (resp) => {
-          this.hasError = false;
-          this.errorMessage = '';
-          this.stats = resp.stats;
-          this.refreshing = false;
-
-          if (resp.logs.length > 0) {
-            this.logs = [...this.logs, ...resp.logs].slice(-500);
-            this.lastId = resp.logs[resp.logs.length - 1].id;
-            this.shouldScroll = this.autoScroll && this.expanded;
-          }
-        },
-        error: (err) => {
-          this.hasError = true;
-          this.errorMessage = err?.message || 'Erro desconhecido';
-          this.refreshing = false;
-        }
-      });
-  }
-
-  refreshNow(): void {
-    if (this.refreshing) return;
-    this.refreshing = true;
-    this.refresh$.next(true);
+    this.openStream();
   }
 
   ngAfterViewChecked(): void {
@@ -422,14 +392,14 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
 
   clearLocal(): void {
     this.logs = [];
+    this.stats = { total: 0, errors: 0, videos: 0, matches: 0 };
   }
 
   setSource(source: IaLogsSource): void {
     if (this.source === source) return;
     this.source = source;
-    this.logs = [];
-    this.lastId = 0;
-    this.shouldScroll = this.autoScroll;
+    this.clearLocal();
+    this.openStream();
   }
 
   trackById(_: number, log: IaLogEntry): number {
@@ -455,5 +425,51 @@ export class IaLogsPanelComponent implements OnInit, OnDestroy, AfterViewChecked
 
   isOkLine(msg: string): boolean {
     return msg.includes('✅');
+  }
+
+  private openStream(): void {
+    this.sub?.unsubscribe();
+    this.connected = false;
+
+    this.sub = this.iaLogsService.stream(this.source).subscribe({
+      next: (ev) => {
+        if (ev.type === 'log') {
+          this.connected = true;
+          this.appendEntry(ev.entry);
+        } else if (ev.type === 'info') {
+          this.connected = true;
+          this.appendEntry({
+            id: this.nextLocalId++,
+            timestamp: new Date().toISOString(),
+            message: ev.message,
+          });
+        } else if (ev.type === 'error') {
+          this.connected = false;
+        }
+      },
+      error: () => {
+        this.connected = false;
+      },
+    });
+  }
+
+  private appendEntry(raw: IaLogEntry): void {
+    // Garante id único local mesmo se o backend reiniciar a contagem.
+    const entry: IaLogEntry = {
+      id: this.nextLocalId++,
+      timestamp: raw.timestamp,
+      message: raw.message,
+    };
+
+    this.logs = [...this.logs, entry].slice(-IaLogsPanelComponent.MAX_BUFFER);
+    this.updateStats(entry.message);
+    this.shouldScroll = this.autoScroll && this.expanded;
+  }
+
+  private updateStats(msg: string): void {
+    this.stats.total++;
+    if (msg.includes('❌') || /\berro\b/i.test(msg)) this.stats.errors++;
+    if (msg.includes('/api/video/process'))         this.stats.videos++;
+    if (msg.includes('/api/match/relato'))          this.stats.matches++;
   }
 }
