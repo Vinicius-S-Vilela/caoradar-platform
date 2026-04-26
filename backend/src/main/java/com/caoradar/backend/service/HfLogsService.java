@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -18,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -209,6 +211,119 @@ public class HfLogsService {
                 it.remove();
             }
         }
+    }
+
+    /**
+     * Abre uma conexão SSE com o HF e re-encaminha cada linha pro cliente.
+     * Reconecta automaticamente se o HF fechar a stream.
+     */
+    public SseEmitter openStream(String source) {
+        String src = "build".equals(source) ? "build" : "run";
+        SseEmitter emitter = new SseEmitter(0L); // sem timeout
+        AtomicBoolean stop = new AtomicBoolean(false);
+
+        emitter.onCompletion(() -> stop.set(true));
+        emitter.onTimeout(()    -> stop.set(true));
+        emitter.onError(t       -> stop.set(true));
+
+        if (hfToken.isEmpty()) {
+            try {
+                emitter.send(SseEmitter.event()
+                    .name("error")
+                    .data("{\"message\":\"HF_TOKEN não configurado no backend\"}"));
+            } catch (Exception ignored) { /**/ }
+            emitter.complete();
+            return emitter;
+        }
+
+        Thread.ofVirtual().name("hf-logs-stream-" + src).start(() -> {
+            AtomicLong counter = new AtomicLong();
+            while (!stop.get()) {
+                try {
+                    streamFromHf(src, emitter, stop, counter);
+                } catch (Exception e) {
+                    if (stop.get()) break;
+                    try {
+                        emitter.send(SseEmitter.event()
+                            .name("info")
+                            .data("{\"message\":\"[hf] reconectando: "
+                                + escapeJson(e.getMessage()) + "\"}"));
+                        Thread.sleep(2000);
+                    } catch (Exception inner) {
+                        break;
+                    }
+                }
+            }
+            try { emitter.complete(); } catch (Exception ignored) { /**/ }
+        });
+
+        return emitter;
+    }
+
+    private void streamFromHf(String source, SseEmitter emitter,
+                              AtomicBoolean stop, AtomicLong counter) throws Exception {
+        String url = "https://huggingface.co/api/spaces/" + hfSpaceId + "/logs/" + source;
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + hfToken)
+                .header("Accept",        "text/event-stream")
+                .GET()
+                .build();
+
+        HttpResponse<java.io.InputStream> resp =
+                http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+
+        if (resp.statusCode() / 100 != 2) {
+            throw new IllegalStateException("HF HTTP " + resp.statusCode());
+        }
+
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(resp.body(), StandardCharsets.UTF_8))) {
+            String line;
+            while (!stop.get() && (line = br.readLine()) != null) {
+                String parsed = line.trim();
+                if (parsed.isEmpty() || parsed.startsWith(":")) continue;
+                if (parsed.startsWith("data:")) parsed = parsed.substring(5).trim();
+                if (parsed.isEmpty()) continue;
+
+                String ts  = null;
+                String msg = parsed;
+                try {
+                    JsonNode node = mapper.readTree(parsed);
+                    if (node.isObject()) {
+                        JsonNode tsn = firstNonNull(node, "timestamp", "time", "ts");
+                        if (tsn != null) ts = tsn.asText();
+                        JsonNode mn  = firstNonNull(node, "data", "message", "line", "log");
+                        if (mn != null) msg = mn.isTextual() ? mn.asText() : mn.toString();
+                    }
+                } catch (Exception ignored) { /* fica o texto cru */ }
+
+                String payload = "{\"id\":" + counter.incrementAndGet()
+                    + ",\"timestamp\":\"" + escapeJson(ts != null ? ts : Instant.now().toString())
+                    + "\",\"message\":\"" + escapeJson(msg) + "\"}";
+
+                emitter.send(SseEmitter.event().name("log").data(payload));
+            }
+        }
+    }
+
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\"");  break;
+                case '\\': sb.append("\\\\");  break;
+                case '\n': sb.append("\\n");   break;
+                case '\r': sb.append("\\r");   break;
+                case '\t': sb.append("\\t");   break;
+                default:
+                    if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
+                    else sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     private static String sha1(String s) {

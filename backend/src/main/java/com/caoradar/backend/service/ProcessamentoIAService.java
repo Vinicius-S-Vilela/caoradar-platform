@@ -30,7 +30,7 @@ public class ProcessamentoIAService {
      * Ele orquestra todo o fluxo de "Matching".
      */
     @Transactional
-    public void processarNovoAvistamento(AvistamentoIA avistamento, String codigoCamera) {
+    public AvistamentoIA processarNovoAvistamento(AvistamentoIA avistamento, String codigoCamera) {
         
         // 1. Vincular a Câmera Física (Se existir)
         Optional<Camera> cameraOpt = cameraRepo.findByCodigoExterno(codigoCamera);
@@ -83,5 +83,6 @@ public class ProcessamentoIAService {
         }
         
         System.out.println("Processamento concluído. Matches gerados: " + candidatos.size());
+        return salvo;
     }
 }
