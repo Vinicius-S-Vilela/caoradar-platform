@@ -3,10 +3,12 @@ package com.caoradar.backend.service;
 import com.caoradar.backend.model.RelatoPerda;
 import com.caoradar.backend.model.StatusRelato;
 import com.caoradar.backend.model.User;
+import com.caoradar.backend.repository.MatchRepository;
 import com.caoradar.backend.repository.RelatoPerdaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -20,6 +22,9 @@ public class RelatoService {
 
     @Autowired
     private RelatoPerdaRepository relatoRepository;
+
+    @Autowired
+    private MatchRepository matchRepository;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -70,9 +75,12 @@ public class RelatoService {
         return relatoRepository.save(relato);
     }
 
+    @Transactional
     public boolean excluirRelato(UUID id) {
-        if (!relatoRepository.existsById(id)) return false;
-        relatoRepository.deleteById(id);
+        RelatoPerda relato = relatoRepository.findById(id).orElse(null);
+        if (relato == null) return false;
+        matchRepository.deleteByRelato(relato);
+        relatoRepository.delete(relato);
         return true;
     }
 

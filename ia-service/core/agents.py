@@ -10,7 +10,9 @@ agente_filtro = Agent(
     description="Filtro visual.",
     instructions=[
         "Analise a imagem.",
-        "Aprove a imagem se for possível visualizar um cão de forma que não esteja MUITO borrado e apareça sua face, corpo e características estruturais mínimas.",
+        "Aprove APENAS se a imagem mostrar um cão REAL (animal vivo, fotografado). REPROVE imediatamente se for desenho, ilustração, cartoon, anime, pintura, escultura, pelúcia, brinquedo, estátua, logotipo, adesivo, grafite, tatuagem, print de tela, render 3D ou qualquer representação não fotográfica de um cão — mesmo que seja realista.",
+        "Sinais de não-real: contornos vetoriais, sombreamento chapado, paleta de cores limitada, traços de caneta/lápis, textura de tecido (pelúcia), pixelização de jogo, suporte/base de estatueta, moldura de quadro, marca d'água artística.",
+        "Após confirmar que é um cão real, aprove se for possível visualizar o cão de forma que não esteja MUITO borrado e apareça sua face, corpo e características estruturais mínimas.",
         'Responda APENAS com este JSON, sem texto ou formatacao markdown (sem usar crases): {"aprovado": true}  ou  {"aprovado": false}',
     ],
     markdown=False,
