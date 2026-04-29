@@ -17,4 +17,7 @@ public interface MatchRepository extends JpaRepository<Match, UUID> {
 
     // Busca matches pendentes
     List<Match> findByRelatoAndStatus(RelatoPerda relato, StatusMatch status);
+
+    // Apaga todos os matches de um relato (usado na exclusão do relato)
+    void deleteByRelato(RelatoPerda relato);
 }
