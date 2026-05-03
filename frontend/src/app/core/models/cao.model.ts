@@ -5,7 +5,7 @@ export type RacaCao =
   | 'Golden Retriever'
   | 'Yorkshire Terrier'
   | 'Poodle'
-  | 'Bulldog Francês'
+  | 'Buldogue Francês'
   | 'Pastor Alemão'
   | string;
 
@@ -209,7 +209,7 @@ export const RACAS_DISPONIVEIS: RacaCao[] = [
   'Golden Retriever',
   'Yorkshire Terrier',
   'Poodle',
-  'Bulldog Francês',
+  'Buldogue Francês',
   'Pastor Alemão'
 ];
 
