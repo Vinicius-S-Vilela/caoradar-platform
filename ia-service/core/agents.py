@@ -34,7 +34,7 @@ agente_classificador = Agent(
     description="Especialista em Fenotipagem Canina.",
     instructions=[
         "Analise a imagem para extrair a assinatura fenotípica e as condições ambientais da foto.",
-        "RAÇA: Retorne o nome exato (ex: 'Golden Retriever'). Se inconclusivo, use 'SDR'.",
+        "RAÇA: Retorne EXATAMENTE um destes valores, com a mesma grafia e acentuação: 'Golden Retriever', 'Yorkshire Terrier', 'Poodle', 'Buldogue Francês', 'Pastor Alemão'. Não use sinônimos (ex: NUNCA 'Bulldog Francês', 'Bulldogue Francês', 'French Bulldog', 'German Shepherd'). Se a raça não for nenhuma dessas ou for inconclusiva, use 'SDR'.",
         "DETALHES IMUTÁVEIS: Foque na morfologia que NÃO muda com banho ou tosa. Ex: 'Focinho alongado', 'Orelha esquerda pendente', 'Cicatrizes', 'Olhos heterocrômicos', 'Proporção pernas/tronco'.",
         "DETALHES MUTÁVEIS/ACESSÓRIOS: Coleiras, manchas superficiais que podem ser sujeira, comprimento do pelo atual.",
         "CONDIÇÕES DA IMAGEM: Descreva explicitamente os fatores que podem distorcer a análise (ex: 'Luz amarela de poste distorcendo cores', 'Cão molhado alterando volume do pelo', 'Cão recém-tosado', 'Baixa resolução/borrão de movimento', 'Muito escuro').",

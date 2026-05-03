@@ -26,7 +26,7 @@ from config.settings import (
     FOLDER_TEMP, BACKEND_API_URL,
     YOLO_POR_SEGUNDO, TEMPO_IA_SEGUNDOS, TEMPO_SUMICO_SEGUNDOS
 )
-from core.utils import extrair_json_robusto
+from core.utils import extrair_json_robusto, normalizar_raca
 from core.agents import agente_filtro, agente_comparador, agente_classificador
 from services.ia_match import fazer_match_avistamento_detectado
 
@@ -127,7 +127,7 @@ def _finalizar_evento(
                 "data_hora":       data_hora,
                 "snapshot_url":    url_short,
                 "features": {
-                    "racaEstimada":     dados.get("raca_provavel", "SDR"),
+                    "racaEstimada":     normalizar_raca(dados.get("raca_provavel")),
                     "corPredominante":  dados.get("cor_predominante", ""),
                     "porte":            dados.get("porte", ""),
                     "confiancaDetecao": round(float(dados.get("confianca_detecao", 0.0)), 4),
