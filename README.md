@@ -505,6 +505,7 @@ tb_users ──(1:N)──► tb_relatos_perda ──(1:N)──► tb_matches �
 
 **Orientação:** Universidade Municipal de São Caetano do Sul (USCS) — Ciência da Computação — 2026
 
+---
 
 <div align="center">
 
