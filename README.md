@@ -498,26 +498,13 @@ tb_users ──(1:N)──► tb_relatos_perda ──(1:N)──► tb_matches �
 | Nome | GitHub |
 |------|--------|
 | Pedro de Abreu Palma | [@pedroabreupalma](https://github.com/pedroabreupalma) |
-| Douglas Primo | — |
+| Douglas Primo | [@DougPrimo2k22](https://github.com/DougPrimo2k22) |
 | Vinicius Vilela | [@Vinicius-S-Vilela](https://github.com/Vinicius-S-Vilela) |
 | Gabriel Shoga | — |
 | Giovanni Chiarelli | — |
 
 **Orientação:** Universidade Municipal de São Caetano do Sul (USCS) — Ciência da Computação — 2026
 
----
-
-## 📚 Documentação
-
-A documentação técnica completa do projeto está no vault Obsidian em `/docs`, cobrindo:
-
-- Arquitetura detalhada de cada serviço
-- Todos os endpoints com exemplos de request/response
-- Schema completo do banco de dados
-- Fluxos de integração entre os microsserviços
-- Guias de configuração e deploy
-
----
 
 <div align="center">
 
